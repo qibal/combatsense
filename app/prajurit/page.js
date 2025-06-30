@@ -168,43 +168,36 @@ export default function PrajuritDashboard() {
     };
 
     // Data dummy sesi latihan tersedia Dihapus, akan diambil dari API
-    // const availableTrainingSessions = [
-    //     {
-    //         id: 1,
-    //         name: "Latihan Tembak Siang",
-    //         date: "2024-06-21",
-    //         time: "14:00",
-    //         location: "Lapangan A",
-    //         commander: "Mayor Suharto",
-    //         participants: 15,
-    //         maxParticipants: 20,
-    //         status: "open"
-    //     },
-    //     {
-    //         id: 2,
-    //         name: "Patroli Malam",
-    //         date: "2024-06-21",
-    //         time: "20:00",
-    //         location: "Sector 3",
-    //         commander: "Kapten Ahmad",
-    //         participants: 8,
-    //         maxParticipants: 10,
-    //         status: "open"
-    //     },
-    //     {
-    //         id: 3,
-    //         name: "Latihan Fisik Pagi",
-    //         date: "2024-06-22",
-    //         time: "06:00",
-    //         location: "Lapangan Olahraga",
-    //         commander: "Letnan Sari",
-    //         participants: 12,
-    //         maxParticipants: 15,
-    //         status: "waiting"
-    //     }
-    // ];
+    const sesiLatihan = [
+        {
+            id: 1,
+            nama: "Latihan Tembak Siang",
+            waktu: "2024-06-21 14:00",
+            lokasi: "Lapangan A",
+            komandanLapangan: [1, 2], // id dari array komandan
+            prajurit: [1, 3, 4],      // id dari array prajurit
+            timMedis: [1],            // id dari array medis
+        },
+        // dst...
+    ];
 
+    const daftarKomandan = [
+        { id: 1, nama: "Mayor Suharto" },
+        { id: 2, nama: "Kapten Ahmad" },
+        // dst...
+    ];
 
+    const daftarPrajurit = [
+        { id: 1, nama: "Budi Santoso" },
+        { id: 2, nama: "Siti Aminah" },
+        // dst...
+    ];
+
+    const daftarMedis = [
+        { id: 1, nama: "Dr. Rina" },
+        { id: 2, nama: "Sersan Medis Dedi" },
+        // dst...
+    ];
 
     const [trainingHistory, setTrainingHistory] = useState([
         {
