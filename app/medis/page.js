@@ -337,17 +337,17 @@ function SoldierPickerDialog({ isOpen, setIsOpen, onSoldierSelect, soldiers }) {
                     <DialogTitle>Pilih Prajurit</DialogTitle>
                 </DialogHeader>
                 <div className="flex flex-col md:flex-row gap-4 my-4">
-                    <Select onValueChange={setFilterUnit}>
-                        <SelectTrigger><SelectValue placeholder="Filter berdasarkan unit..." /></SelectTrigger>
+                    <Select value={filterUnit} onValueChange={(value) => setFilterUnit(value === 'all-units' ? '' : value)}>
+                        <SelectTrigger><SelectValue placeholder="Filter unit" /></SelectTrigger>
                         <SelectContent>
-                             <SelectItem value="">Semua Unit</SelectItem>
+                             <SelectItem value="all-units">Semua Unit</SelectItem>
                             {units.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
-                     <Select onValueChange={setFilterRank}>
-                        <SelectTrigger><SelectValue placeholder="Filter berdasarkan pangkat..." /></SelectTrigger>
+                     <Select value={filterRank} onValueChange={(value) => setFilterRank(value === 'all-ranks' ? '' : value)}>
+                        <SelectTrigger><SelectValue placeholder="Filter pangkat" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Semua Pangkat</SelectItem>
+                            <SelectItem value="all-ranks">Semua Pangkat</SelectItem>
                             {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                         </SelectContent>
                     </Select>

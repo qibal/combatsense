@@ -7,8 +7,8 @@ import 'dotenv/config';
  * berdasarkan skema yang didefinisikan di './model/schema.js'.
  */
 export default defineConfig({
-    schema: './model/schema.js',      // Path ke file schema database
-    out: './database/migrations', // Direktori output untuk file migrasi
+    schema: './lib/schema.js',      // Path ke file schema database
+    out: './database', // Direktori output untuk file migrasi
     dialect: 'postgresql',          // Tipe database yang digunakan
     dbCredentials: {
         url: process.env.DATABASE_URL, // Mengambil URL database dari environment variable
