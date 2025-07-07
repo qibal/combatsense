@@ -1,8 +1,8 @@
-'use client';
-
-import { DUMMY_USERS, DUMMY_SESSIONS } from '@/lib/admin-dummy-data';
+import { db } from '@/lib/db';
+import { users, training_sessions } from '@/lib/schema';
+import { eq, count } from 'drizzle-orm';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/Shadcn/card';
-import { Users, ActivitySquare, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Users, ActivitySquare, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 // Komponen untuk kartu statistik
@@ -26,38 +26,66 @@ function StatCard({ title, value, description, icon: Icon, href }) {
 }
 
 // Komponen utama dashboard admin
-export default function AdminDashboardPage() {
-    const totalUsers = DUMMY_USERS.length;
-    const activeSessions = DUMMY_SESSIONS.filter(s => s.status === 'berlangsung').length;
-    const activeUsers = DUMMY_USERS.filter(u => u.is_active).length;
-    const prajuritCount = DUMMY_USERS.filter(u => u.role === 'prajurit').length;
-    const komandanCount = DUMMY_USERS.filter(u => u.role === 'komandan').length;
-    const medisCount = DUMMY_USERS.filter(u => u.role === 'medis').length;
+export default async function AdminDashboardPage() {
+  let statsData = {
+    totalUsers: 0,
+    activeSessions: 0,
+    activeUsers: 0,
+    prajuritCount: 0,
+    komandanCount: 0,
+    medisCount: 0,
+  };
 
-    const stats = [
-        { title: "Total Pengguna", value: totalUsers, description: "Semua role terdaftar", icon: Users, href: "/admin/accounts" },
-        { title: "Sesi Aktif", value: activeSessions, description: "Sesi latihan sedang berlangsung", icon: ActivitySquare, href: "/admin/sessions" },
-        { title: "Akun Aktif", value: activeUsers, description: "Pengguna dengan status aktif", icon: ShieldCheck, href: "/admin/accounts" },
-        { title: "Prajurit", value: prajuritCount, description: "Jumlah prajurit terdaftar", icon: Users, href: "/admin/accounts" },
-        { title: "Komandan", value: komandanCount, description: "Jumlah komandan terdaftar", icon: Users, href: "/admin/accounts" },
-        { title: "Tim Medis", value: medisCount, description: "Jumlah tim medis terdaftar", icon: Users, href: "/admin/accounts" },
-    ];
+  try {
+    const [
+      totalUsersData,
+      activeSessionsData,
+      activeUsersData,
+      prajuritCountData,
+      komandanCountData,
+      medisCountData,
+    ] = await Promise.all([
+      db.select({ value: count() }).from(users),
+      db.select({ value: count() }).from(training_sessions).where(eq(training_sessions.status, 'berlangsung')),
+      db.select({ value: count() }).from(users).where(eq(users.is_active, true)),
+      db.select({ value: count() }).from(users).where(eq(users.role, 'prajurit')),
+      db.select({ value: count() }).from(users).where(eq(users.role, 'komandan')),
+      db.select({ value: count() }).from(users).where(eq(users.role, 'medis')),
+    ]);
 
-    return (
-        <div className="space-y-6">
-            <div className="space-y-1">
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard Admin</h1>
-                <p className="text-gray-500 dark:text-gray-400">Ringkasan overview sistem CombatSense.</p>
-            </div>
-            
-            {/* Grid Statistik Utama */}
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                {stats.map((stat, index) => (
-                    <StatCard key={index} {...stat} />
-                ))}
-            </div>
+    statsData = {
+      totalUsers: totalUsersData[0]?.value ?? 0,
+      activeSessions: activeSessionsData[0]?.value ?? 0,
+      activeUsers: activeUsersData[0]?.value ?? 0,
+      prajuritCount: prajuritCountData[0]?.value ?? 0,
+      komandanCount: komandanCountData[0]?.value ?? 0,
+      medisCount: medisCountData[0]?.value ?? 0,
+    };
+  } catch (error) {
+    console.error("Failed to fetch admin dashboard stats:", error);
+  }
 
-            {/* Quick Actions & Recent Activities can be added here */}
-        </div>
-    );
+  const stats = [
+    { title: "Total Pengguna", value: statsData.totalUsers, description: "Semua role terdaftar", icon: Users, href: "/admin/accounts" },
+    { title: "Sesi Aktif", value: statsData.activeSessions, description: "Sesi latihan sedang berlangsung", icon: ActivitySquare, href: "/admin/sessions" },
+    { title: "Akun Aktif", value: statsData.activeUsers, description: "Pengguna dengan status aktif", icon: ShieldCheck, href: "/admin/accounts" },
+    { title: "Prajurit", value: statsData.prajuritCount, description: "Jumlah prajurit terdaftar", icon: Users, href: "/admin/accounts" },
+    { title: "Komandan", value: statsData.komandanCount, description: "Jumlah komandan terdaftar", icon: Users, href: "/admin/accounts" },
+    { title: "Tim Medis", value: statsData.medisCount, description: "Jumlah tim medis terdaftar", icon: Users, href: "/admin/accounts" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard Admin</h1>
+        <p className="text-gray-500 dark:text-gray-400">Ringkasan overview sistem CombatSense.</p>
+      </div>
+
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        {stats.map((stat, index) => (
+          <StatCard key={index} {...stat} />
+        ))}
+      </div>
+    </div>
+  );
 }

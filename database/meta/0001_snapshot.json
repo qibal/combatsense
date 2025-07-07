@@ -1,62 +1,235 @@
 {
-  "id": "8fb7954d-def2-48ca-8832-8c773fc2085c",
-  "prevId": "d764408a-17fe-4953-9861-24dc89669a00",
+  "id": "72230f5c-8a74-46c2-b6d5-fa52d80fa49f",
+  "prevId": "a6ef598f-58fd-47ef-b07c-c21af8ee71f9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.rank": {
-      "name": "rank",
+    "public.live_monitoring_stats": {
+      "name": "live_monitoring_stats",
       "schema": "",
       "columns": {
-        "rank_id": {
-          "name": "rank_id",
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "heart_rate": {
+          "name": "heart_rate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "speed_kph": {
+          "name": "speed_kph",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "numeric(9, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "numeric(9, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "live_monitoring_stats_session_id_training_sessions_id_fk": {
+          "name": "live_monitoring_stats_session_id_training_sessions_id_fk",
+          "tableFrom": "live_monitoring_stats",
+          "tableTo": "training_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "live_monitoring_stats_user_id_users_id_fk": {
+          "name": "live_monitoring_stats_user_id_users_id_fk",
+          "tableFrom": "live_monitoring_stats",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.medical_records": {
+      "name": "medical_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
           "type": "serial",
           "primaryKey": true,
           "notNull": true
         },
-        "rank_name": {
-          "name": "rank_name",
-          "type": "varchar(50)",
+        "checkup_date": {
+          "name": "checkup_date",
+          "type": "date",
           "primaryKey": false,
           "notNull": true
         },
-        "rank_description": {
-          "name": "rank_description",
+        "general_condition": {
+          "name": "general_condition",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
+        "notes": {
+          "name": "notes",
+          "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "default": true
+          "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
+        "weight_kg": {
+          "name": "weight_kg",
+          "type": "real",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": false
         },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
+        "height_cm": {
+          "name": "height_cm",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": false
+        },
+        "blood_pressure": {
+          "name": "blood_pressure",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pulse": {
+          "name": "pulse",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "temperature": {
+          "name": "temperature",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "other_diseases": {
+          "name": "other_diseases",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "examiner_id": {
+          "name": "examiner_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "medical_records_user_id_users_id_fk": {
+          "name": "medical_records_user_id_users_id_fk",
+          "tableFrom": "medical_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "medical_records_examiner_id_users_id_fk": {
+          "name": "medical_records_examiner_id_users_id_fk",
+          "tableFrom": "medical_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "examiner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ranks": {
+      "name": "ranks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "rank_rank_name_unique": {
-          "name": "rank_rank_name_unique",
+        "ranks_name_unique": {
+          "name": "ranks_name_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "rank_name"
+            "name"
           ]
         }
       },
@@ -64,59 +237,213 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.unit": {
-      "name": "unit",
+    "public.session_participants": {
+      "name": "session_participants",
       "schema": "",
       "columns": {
-        "unit_id": {
-          "name": "unit_id",
+        "session_id": {
+          "name": "session_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "session_participants_session_id_training_sessions_id_fk": {
+          "name": "session_participants_session_id_training_sessions_id_fk",
+          "tableFrom": "session_participants",
+          "tableTo": "training_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "session_participants_user_id_users_id_fk": {
+          "name": "session_participants_user_id_users_id_fk",
+          "tableFrom": "session_participants",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "session_participants_session_id_user_id_pk": {
+          "name": "session_participants_session_id_user_id_pk",
+          "columns": [
+            "session_id",
+            "user_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.training_locations": {
+      "name": "training_locations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
           "type": "serial",
           "primaryKey": true,
           "notNull": true
         },
-        "unit_name": {
-          "name": "unit_name",
-          "type": "varchar(100)",
+        "name": {
+          "name": "name",
+          "type": "varchar(256)",
           "primaryKey": false,
           "notNull": true
         },
-        "unit_description": {
-          "name": "unit_description",
+        "description": {
+          "name": "description",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
+        "map_image_url": {
+          "name": "map_image_url",
+          "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "default": true
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.training_sessions": {
+      "name": "training_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
+        "name": {
+          "name": "name",
+          "type": "varchar(256)",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": true
         },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
+        "description": {
+          "name": "description",
+          "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": false
+        },
+        "scheduled_at": {
+          "name": "scheduled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "session_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'direncanakan'"
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commander_id": {
+          "name": "commander_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "training_sessions_location_id_training_locations_id_fk": {
+          "name": "training_sessions_location_id_training_locations_id_fk",
+          "tableFrom": "training_sessions",
+          "tableTo": "training_locations",
+          "columnsFrom": [
+            "location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "training_sessions_commander_id_users_id_fk": {
+          "name": "training_sessions_commander_id_users_id_fk",
+          "tableFrom": "training_sessions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "commander_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.units": {
+      "name": "units",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "unit_unit_name_unique": {
-          "name": "unit_unit_name_unique",
+        "units_name_unique": {
+          "name": "units_name_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "unit_name"
+            "name"
           ]
         }
       },
@@ -128,39 +455,65 @@
       "name": "users",
       "schema": "",
       "columns": {
-        "user_id": {
-          "name": "user_id",
+        "id": {
+          "name": "id",
           "type": "serial",
           "primaryKey": true,
           "notNull": true
         },
-        "username": {
-          "name": "username",
-          "type": "varchar(50)",
+        "full_name": {
+          "name": "full_name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(256)",
           "primaryKey": false,
           "notNull": true
         },
         "password_hash": {
           "name": "password_hash",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "full_name": {
-          "name": "full_name",
-          "type": "varchar(100)",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "role": {
           "name": "role",
-          "type": "varchar(20)",
+          "type": "user_role",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
-        "unit_id": {
-          "name": "unit_id",
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "avatar": {
+          "name": "avatar",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "join_date": {
+          "name": "join_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "height_cm": {
+          "name": "height_cm",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weight_kg": {
+          "name": "weight_kg",
+          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
@@ -170,58 +523,37 @@
           "primaryKey": false,
           "notNull": false
         },
-        "avatar": {
-          "name": "avatar",
-          "type": "varchar(255)",
+        "unit_id": {
+          "name": "unit_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {
-        "users_unit_id_unit_unit_id_fk": {
-          "name": "users_unit_id_unit_unit_id_fk",
+        "users_rank_id_ranks_id_fk": {
+          "name": "users_rank_id_ranks_id_fk",
           "tableFrom": "users",
-          "tableTo": "unit",
+          "tableTo": "ranks",
           "columnsFrom": [
-            "unit_id"
+            "rank_id"
           ],
           "columnsTo": [
-            "unit_id"
+            "id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "users_rank_id_rank_rank_id_fk": {
-          "name": "users_rank_id_rank_rank_id_fk",
+        "users_unit_id_units_id_fk": {
+          "name": "users_unit_id_units_id_fk",
           "tableFrom": "users",
-          "tableTo": "rank",
+          "tableTo": "units",
           "columnsFrom": [
-            "rank_id"
+            "unit_id"
           ],
           "columnsTo": [
-            "rank_id"
+            "id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -229,11 +561,11 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "users_username_unique": {
-          "name": "users_username_unique",
+        "users_email_unique": {
+          "name": "users_email_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "username"
+            "email"
           ]
         }
       },
@@ -242,7 +574,28 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {},
+  "enums": {
+    "public.session_status": {
+      "name": "session_status",
+      "schema": "public",
+      "values": [
+        "direncanakan",
+        "berlangsung",
+        "selesai",
+        "dibatalkan"
+      ]
+    },
+    "public.user_role": {
+      "name": "user_role",
+      "schema": "public",
+      "values": [
+        "admin",
+        "komandan",
+        "medis",
+        "prajurit"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {},

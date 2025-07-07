@@ -1,14 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { DUMMY_USERS, DUMMY_UNITS, DUMMY_RANKS, getFullUsersData } from '@/lib/admin-dummy-data';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/Shadcn/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/Shadcn/card';
 import { Input } from '@/components/Shadcn/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/Shadcn/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/Shadcn/tabs';
 import { Badge } from '@/components/Shadcn/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/Shadcn/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/Shadcn/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/Shadcn/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/Shadcn/select';
 import { Label } from '@/components/Shadcn/label';
@@ -16,21 +15,51 @@ import { Switch } from '@/components/Shadcn/switch';
 import { UserPlus, Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from "sonner";
 
+// Import server actions
+import { getFullUsersData, upsertUser, deleteUser } from '@/actions/admin/accounts/users_actions';
+import { getRanks, addRank, updateRank, deleteRank } from '@/actions/admin/accounts/rank_actions';
+import { getUnits, addUnit, updateUnit, deleteUnit } from '@/actions/admin/accounts/unit_actions';
+
 // Main component for account management
 export default function AccountsPage() {
-    const [users, setUsers] = useState(getFullUsersData());
-    const [units, setUnits] = useState(DUMMY_UNITS);
-    const [ranks, setRanks] = useState(DUMMY_RANKS);
-    
+    const [users, setUsers] = useState([]);
+    const [units, setUnits] = useState([]);
+    const [ranks, setRanks] = useState([]);
+    const [loading, setLoading] = useState(true);
+
     // States for dialogs
     const [isUserFormOpen, setIsUserFormOpen] = useState(false);
     const [isUnitFormOpen, setIsUnitFormOpen] = useState(false);
     const [isRankFormOpen, setIsRankFormOpen] = useState(false);
-    
+
     // States for editing
     const [editingUser, setEditingUser] = useState(null);
     const [editingUnit, setEditingUnit] = useState(null);
     const [editingRank, setEditingRank] = useState(null);
+
+    // Fetch initial data
+    async function fetchData() {
+        setLoading(true);
+        const [usersRes, unitsRes, ranksRes] = await Promise.all([
+            getFullUsersData(),
+            getUnits(),
+            getRanks()
+        ]);
+        if (usersRes.success) setUsers(usersRes.data);
+        else toast.error(usersRes.message);
+
+        if (unitsRes.success) setUnits(unitsRes.data);
+        else toast.error(unitsRes.message);
+
+        if (ranksRes.success) setRanks(ranksRes.data);
+        else toast.error(ranksRes.message);
+
+        setLoading(false);
+    }
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     // Handlers for User
     const handleEditUserClick = (user) => {
@@ -38,9 +67,14 @@ export default function AccountsPage() {
         setIsUserFormOpen(true);
     };
 
-    const handleDeleteUser = (userId) => {
-        setUsers(users.filter(u => u.id !== userId));
-        toast.success("Pengguna berhasil dihapus.");
+    const handleDeleteUser = async (userId) => {
+        const result = await deleteUser(userId);
+        if (result.success) {
+            toast.success(result.message);
+            setUsers(prev => prev.filter(u => u.id !== userId));
+        } else {
+            toast.error(result.message);
+        }
     };
 
     // Handlers for Unit
@@ -49,32 +83,30 @@ export default function AccountsPage() {
         setIsUnitFormOpen(true);
     };
 
-    const handleDeleteUnit = (unitId) => {
-        // Add check if unit is in use
-        const isUnitInUse = users.some(user => user.unit_id === unitId);
-        if (isUnitInUse) {
-            toast.error("Unit tidak dapat dihapus karena masih digunakan oleh pengguna.");
-            return;
+    const handleDeleteUnit = async (unitId) => {
+        const result = await deleteUnit(unitId);
+        if (result.success) {
+            toast.success(result.message);
+            setUnits(prev => prev.filter(u => u.id !== unitId));
+        } else {
+            toast.error(result.message);
         }
-        setUnits(units.filter(u => u.id !== unitId));
-        toast.success("Unit berhasil dihapus.");
     };
-    
+
     // Handlers for Rank
     const handleEditRankClick = (rank) => {
         setEditingRank(rank);
         setIsRankFormOpen(true);
     };
 
-    const handleDeleteRank = (rankId) => {
-         // Add check if rank is in use
-        const isRankInUse = users.some(user => user.rank_id === rankId);
-        if (isRankInUse) {
-            toast.error("Pangkat tidak dapat dihapus karena masih digunakan oleh pengguna.");
-            return;
+    const handleDeleteRank = async (rankId) => {
+        const result = await deleteRank(rankId);
+        if (result.success) {
+            toast.success(result.message);
+            setRanks(prev => prev.filter(r => r.id !== rankId));
+        } else {
+            toast.error(result.message);
         }
-        setRanks(ranks.filter(r => r.id !== rankId));
-        toast.success("Pangkat berhasil dihapus.");
     };
 
     const getRoleBadge = (role) => {
@@ -82,6 +114,7 @@ export default function AccountsPage() {
             case 'prajurit': return <Badge variant="default">Prajurit</Badge>;
             case 'komandan': return <Badge variant="destructive">Komandan</Badge>;
             case 'medis': return <Badge variant="outline">Medis</Badge>;
+            case 'admin': return <Badge variant="secondary">Admin</Badge>;
             default: return <Badge variant="secondary">{role}</Badge>;
         }
     };
@@ -90,43 +123,41 @@ export default function AccountsPage() {
         <Badge variant="default" className="bg-green-500">Aktif</Badge> :
         <Badge variant="destructive">Non-aktif</Badge>;
 
+    if (loading) {
+        return <div>Memuat data...</div>;
+    }
+
     return (
         <div className="space-y-6">
             <div>
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Manajemen Akun</h1>
                 <p className="text-gray-500 dark:text-gray-400">Kelola pengguna, unit, dan pangkat dalam sistem.</p>
             </div>
-            
-            {/* User Form Dialog */}
-            <UserFormDialog 
-                isOpen={isUserFormOpen} 
+
+            <UserFormDialog
+                isOpen={isUserFormOpen}
                 setIsOpen={setIsUserFormOpen}
                 editingUser={editingUser}
                 setEditingUser={setEditingUser}
-                users={users}
-                setUsers={setUsers}
                 units={units}
                 ranks={ranks}
+                onFinished={fetchData}
             />
 
-            {/* Unit Form Dialog */}
-            <UnitFormDialog 
+            <UnitFormDialog
                 isOpen={isUnitFormOpen}
                 setIsOpen={setIsUnitFormOpen}
                 editingUnit={editingUnit}
                 setEditingUnit={setEditingUnit}
-                units={units}
-                setUnits={setUnits}
+                onFinished={fetchData}
             />
 
-             {/* Rank Form Dialog */}
             <RankFormDialog
                 isOpen={isRankFormOpen}
                 setIsOpen={setIsRankFormOpen}
                 editingRank={editingRank}
                 setEditingRank={setEditingRank}
-                ranks={ranks}
-                setRanks={setRanks}
+                onFinished={fetchData}
             />
 
             <Tabs defaultValue="accounts" className="w-full">
@@ -135,8 +166,7 @@ export default function AccountsPage() {
                     <TabsTrigger value="units">Kelola Unit</TabsTrigger>
                     <TabsTrigger value="ranks">Kelola Pangkat</TabsTrigger>
                 </TabsList>
-                
-                {/* Accounts Tab */}
+
                 <TabsContent value="accounts" className="mt-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between">
@@ -149,11 +179,12 @@ export default function AccountsPage() {
                             </Button>
                         </CardHeader>
                         <CardContent>
-                           <div className="overflow-x-auto">
-                               <Table className="min-w-full">
+                            <div className="overflow-x-auto">
+                                <Table className="min-w-full">
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Nama Lengkap</TableHead>
+                                            <TableHead>Email</TableHead>
                                             <TableHead>Role</TableHead>
                                             <TableHead>Unit</TableHead>
                                             <TableHead>Pangkat</TableHead>
@@ -165,6 +196,7 @@ export default function AccountsPage() {
                                         {users.map((user) => (
                                             <TableRow key={user.id}>
                                                 <TableCell className="font-medium whitespace-nowrap">{user.full_name}</TableCell>
+                                                <TableCell>{user.email}</TableCell>
                                                 <TableCell>{getRoleBadge(user.role)}</TableCell>
                                                 <TableCell className="whitespace-nowrap">{user.unit_name}</TableCell>
                                                 <TableCell>{user.rank_name}</TableCell>
@@ -177,31 +209,29 @@ export default function AccountsPage() {
                                         ))}
                                     </TableBody>
                                 </Table>
-                           </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
-                
-                {/* Units Tab */}
+
                 <TabsContent value="units" className="mt-4">
                     <Card>
-                         <CardHeader className="flex flex-row items-center justify-between">
-                             <div>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
                                 <CardTitle>Daftar Unit</CardTitle>
                                 <CardDescription>Tambah atau hapus unit.</CardDescription>
-                             </div>
-                             <Button onClick={() => { setEditingUnit(null); setIsUnitFormOpen(true); }}>
-                                 <Plus className="mr-2 h-4 w-4" /> Tambah Unit
-                             </Button>
+                            </div>
+                            <Button onClick={() => { setEditingUnit(null); setIsUnitFormOpen(true); }}>
+                                <Plus className="mr-2 h-4 w-4" /> Tambah Unit
+                            </Button>
                         </CardHeader>
                         <CardContent>
-                             <div className="overflow-x-auto">
-                                 <Table className="min-w-full">
+                            <div className="overflow-x-auto">
+                                <Table className="min-w-full">
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>ID</TableHead>
                                             <TableHead>Nama Unit</TableHead>
-                                            <TableHead>Tanggal Dibuat</TableHead>
                                             <TableHead className="text-right">Aksi</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -210,7 +240,6 @@ export default function AccountsPage() {
                                             <TableRow key={unit.id}>
                                                 <TableCell>{unit.id}</TableCell>
                                                 <TableCell className="font-medium whitespace-nowrap">{unit.name}</TableCell>
-                                                <TableCell>{unit.created_at}</TableCell>
                                                 <TableCell className="flex justify-end gap-2">
                                                     <Button variant="outline" size="icon" onClick={() => handleEditUnitClick(unit)}><Edit className="h-4 w-4" /></Button>
                                                     <DeleteConfirmationDialog onConfirm={() => handleDeleteUnit(unit.id)} />
@@ -219,15 +248,14 @@ export default function AccountsPage() {
                                         ))}
                                     </TableBody>
                                 </Table>
-                             </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
 
-                {/* Ranks Tab */}
                 <TabsContent value="ranks" className="mt-4">
                     <Card>
-                         <CardHeader className="flex flex-row items-center justify-between">
+                        <CardHeader className="flex flex-row items-center justify-between">
                             <div>
                                 <CardTitle>Daftar Pangkat</CardTitle>
                                 <CardDescription>Tambah atau hapus pangkat.</CardDescription>
@@ -238,12 +266,11 @@ export default function AccountsPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
-                                 <Table className="min-w-full">
+                                <Table className="min-w-full">
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>ID</TableHead>
                                             <TableHead>Nama Pangkat</TableHead>
-                                            <TableHead>Tanggal Dibuat</TableHead>
                                             <TableHead className="text-right">Aksi</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -252,10 +279,9 @@ export default function AccountsPage() {
                                             <TableRow key={rank.id}>
                                                 <TableCell>{rank.id}</TableCell>
                                                 <TableCell className="font-medium whitespace-nowrap">{rank.name}</TableCell>
-                                                <TableCell>{rank.created_at}</TableCell>
                                                 <TableCell className="flex justify-end gap-2">
                                                     <Button variant="outline" size="icon" onClick={() => handleEditRankClick(rank)}><Edit className="h-4 w-4" /></Button>
-                                                     <DeleteConfirmationDialog onConfirm={() => handleDeleteRank(rank.id)} />
+                                                    <DeleteConfirmationDialog onConfirm={() => handleDeleteRank(rank.id)} />
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -270,7 +296,6 @@ export default function AccountsPage() {
     );
 }
 
-// Reusable Delete Confirmation Dialog
 function DeleteConfirmationDialog({ onConfirm }) {
     return (
         <AlertDialog>
@@ -293,54 +318,44 @@ function DeleteConfirmationDialog({ onConfirm }) {
     );
 }
 
-// User Form Component
-function UserFormDialog({ isOpen, setIsOpen, editingUser, setEditingUser, users, setUsers, units, ranks }) {
+function UserFormDialog({ isOpen, setIsOpen, editingUser, setEditingUser, units, ranks, onFinished }) {
     const [formData, setFormData] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useState(() => {
+    useEffect(() => {
         if (editingUser) {
             setFormData(editingUser);
         } else {
-            setFormData({ full_name: '', role: '', unit_id: '', rank_id: '', is_active: true });
+            setFormData({ full_name: '', email: '', password: '', role: '', unit_id: '', rank_id: '', is_active: true });
         }
-    }, [editingUser]);
+    }, [editingUser, isOpen]);
 
     const handleOpenChange = (open) => {
         if (!open) {
             setEditingUser(null);
-            setFormData({ full_name: '', role: '', unit_id: '', rank_id: '', is_active: true });
+            setFormData({ full_name: '', email: '', password: '', role: '', unit_id: '', rank_id: '', is_active: true });
         }
         setIsOpen(open);
     };
-    
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        // Validation
-        if (!formData.full_name || !formData.role || !formData.unit_id || !formData.rank_id) {
-            toast.error("Harap isi semua kolom yang diperlukan.");
-            return;
-        }
 
-        if (editingUser) {
-            // Edit user
-            const updatedUsers = users.map(u => u.id === editingUser.id ? { ...u, ...formData } : u);
-            setUsers(updatedUsers);
-            toast.success("Pengguna berhasil diperbarui.");
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+
+        const result = await upsertUser(editingUser?.id, formData);
+
+        if (result.success) {
+            toast.success(result.message);
+            onFinished(); // Re-fetch data on parent
+            handleOpenChange(false);
         } else {
-            // Add new user
-            const newUser = {
-                id: `USR${Math.floor(Math.random() * 900) + 100}`,
-                ...formData,
-                avatar: `https://i.pravatar.cc/150?u=a042581f4e29026704d`
-            };
-            setUsers([...users, newUser]);
-            toast.success("Pengguna baru berhasil ditambahkan.");
+            toast.error(result.message);
         }
-        handleOpenChange(false);
+        setIsSubmitting(false);
     };
-    
+
     return (
-         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>{editingUser ? 'Edit Pengguna' : 'Tambah Pengguna Baru'}</DialogTitle>
@@ -349,69 +364,79 @@ function UserFormDialog({ isOpen, setIsOpen, editingUser, setEditingUser, users,
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
-                <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="name" className="text-right">Nama</Label>
-                        <Input id="name" value={formData.full_name || ''} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="col-span-3" />
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="name" className="text-right">Nama</Label>
+                            <Input id="name" value={formData.full_name || ''} onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} className="col-span-3" />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="email" className="text-right">Email</Label>
+                            <Input id="email" type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="col-span-3" />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="password" className="text-right">Password</Label>
+                            <Input id="password" type="password" placeholder={editingUser ? 'Kosongkan jika tidak ganti' : ''} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="col-span-3" />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="role" className="text-right">Role</Label>
+                            <Select value={formData.role || ''} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                                <SelectTrigger className="col-span-3">
+                                    <SelectValue placeholder="Pilih role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                    <SelectItem value="prajurit">Prajurit</SelectItem>
+                                    <SelectItem value="komandan">Komandan</SelectItem>
+                                    <SelectItem value="medis">Medis</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="unit" className="text-right">Unit</Label>
+                            <Select value={String(formData.unit_id || '')} onValueChange={(value) => setFormData({ ...formData, unit_id: parseInt(value) })}>
+                                <SelectTrigger className="col-span-3">
+                                    <SelectValue placeholder="Pilih unit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {units.map(unit => <SelectItem key={unit.id} value={String(unit.id)}>{unit.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="rank" className="text-right">Pangkat</Label>
+                            <Select value={String(formData.rank_id || '')} onValueChange={(value) => setFormData({ ...formData, rank_id: parseInt(value) })}>
+                                <SelectTrigger className="col-span-3">
+                                    <SelectValue placeholder="Pilih pangkat" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {ranks.map(rank => <SelectItem key={rank.id} value={String(rank.id)}>{rank.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Switch id="is_active" checked={formData.is_active} onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })} />
+                            <Label htmlFor="is_active">Aktif</Label>
+                        </div>
                     </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="role" className="text-right">Role</Label>
-                        <Select value={formData.role || ''} onValueChange={(value) => setFormData({...formData, role: value})}>
-                             <SelectTrigger className="col-span-3">
-                                <SelectValue placeholder="Pilih role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="prajurit">Prajurit</SelectItem>
-                                <SelectItem value="komandan">Komandan</SelectItem>
-                                <SelectItem value="medis">Medis</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="unit" className="text-right">Unit</Label>
-                        <Select value={String(formData.unit_id || '')} onValueChange={(value) => setFormData({...formData, unit_id: parseInt(value)})}>
-                             <SelectTrigger className="col-span-3">
-                                <SelectValue placeholder="Pilih unit" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {units.map(unit => <SelectItem key={unit.id} value={String(unit.id)}>{unit.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="rank" className="text-right">Pangkat</Label>
-                        <Select value={String(formData.rank_id || '')} onValueChange={(value) => setFormData({...formData, rank_id: parseInt(value)})}>
-                             <SelectTrigger className="col-span-3">
-                                <SelectValue placeholder="Pilih pangkat" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {ranks.map(rank => <SelectItem key={rank.id} value={String(rank.id)}>{rank.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <Switch id="is_active" checked={formData.is_active} onCheckedChange={(checked) => setFormData({...formData, is_active: checked})} />
-                        <Label htmlFor="is_active">Aktif</Label>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button type="submit">Simpan</Button>
-                </DialogFooter>
+                    <DialogFooter>
+                        <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? 'Menyimpan...' : 'Simpan'}
+                        </Button>
+                    </DialogFooter>
                 </form>
             </DialogContent>
         </Dialog>
     );
 }
 
-
-// Unit Form Component
-function UnitFormDialog({ isOpen, setIsOpen, editingUnit, setEditingUnit, units, setUnits }) {
+function UnitFormDialog({ isOpen, setIsOpen, editingUnit, setEditingUnit, onFinished }) {
     const [name, setName] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useState(() => {
+    useEffect(() => {
         setName(editingUnit ? editingUnit.name : '');
-    }, [editingUnit]);
-    
+    }, [editingUnit, isOpen]);
+
     const handleOpenChange = (open) => {
         if (!open) {
             setEditingUnit(null);
@@ -419,26 +444,25 @@ function UnitFormDialog({ isOpen, setIsOpen, editingUnit, setEditingUnit, units,
         }
         setIsOpen(open);
     };
-    
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (!name.trim()) {
-            toast.error("Nama unit tidak boleh kosong.");
-            return;
-        }
 
-        if (editingUnit) {
-            const updatedUnits = units.map(u => u.id === editingUnit.id ? { ...u, name } : u);
-            setUnits(updatedUnits);
-            toast.success("Unit berhasil diperbarui.");
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+
+        const result = editingUnit
+            ? await updateUnit(editingUnit.id, name)
+            : await addUnit(name);
+
+        if (result.success) {
+            toast.success(result.message);
+            onFinished();
+            handleOpenChange(false);
         } else {
-            const newUnit = { id: Math.max(...units.map(u => u.id)) + 1, name, created_at: new Date().toLocaleDateString('id-ID') };
-            setUnits([...units, newUnit]);
-            toast.success("Unit baru berhasil ditambahkan.");
+            toast.error(result.message);
         }
-        handleOpenChange(false);
+        setIsSubmitting(false);
     };
-    
+
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-[425px]">
@@ -453,7 +477,7 @@ function UnitFormDialog({ isOpen, setIsOpen, editingUnit, setEditingUnit, units,
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="submit">Simpan</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Menyimpan...' : 'Simpan'}</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -461,13 +485,13 @@ function UnitFormDialog({ isOpen, setIsOpen, editingUnit, setEditingUnit, units,
     );
 }
 
-// Rank Form Component
-function RankFormDialog({ isOpen, setIsOpen, editingRank, setEditingRank, ranks, setRanks }) {
+function RankFormDialog({ isOpen, setIsOpen, editingRank, setEditingRank, onFinished }) {
     const [name, setName] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useState(() => {
+    useEffect(() => {
         setName(editingRank ? editingRank.name : '');
-    }, [editingRank]);
+    }, [editingRank, isOpen]);
 
     const handleOpenChange = (open) => {
         if (!open) {
@@ -477,23 +501,22 @@ function RankFormDialog({ isOpen, setIsOpen, editingRank, setEditingRank, ranks,
         setIsOpen(open);
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!name.trim()) {
-            toast.error("Nama pangkat tidak boleh kosong.");
-            return;
-        }
+        setIsSubmitting(true);
 
-        if (editingRank) {
-            const updatedRanks = ranks.map(r => r.id === editingRank.id ? { ...r, name } : r);
-            setRanks(updatedRanks);
-            toast.success("Pangkat berhasil diperbarui.");
+        const result = editingRank
+            ? await updateRank(editingRank.id, name)
+            : await addRank(name);
+
+        if (result.success) {
+            toast.success(result.message);
+            onFinished();
+            handleOpenChange(false);
         } else {
-            const newRank = { id: Math.max(...ranks.map(r => r.id)) + 1, name, created_at: new Date().toLocaleDateString('id-ID') };
-            setRanks([...ranks, newRank]);
-            toast.success("Pangkat baru berhasil ditambahkan.");
+            toast.error(result.message);
         }
-        handleOpenChange(false);
+        setIsSubmitting(false);
     };
 
     return (
@@ -510,7 +533,7 @@ function RankFormDialog({ isOpen, setIsOpen, editingRank, setEditingRank, ranks,
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="submit">Simpan</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Menyimpan...' : 'Simpan'}</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

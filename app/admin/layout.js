@@ -1,20 +1,29 @@
 'use client';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarSeparator, SidebarTrigger, SidebarInset } from '@/components/Shadcn/sidebar';
 import { Home, Users, CalendarDays, ActivitySquare, MapPin, Settings, LogOut, Shield } from 'lucide-react';
+import { logoutAction } from "@/actions/auth/logout";
 
 export default function AdminLayout({ children }) {
     const pathname = usePathname();
+    const router = useRouter();
 
     const menuItems = [
         { href: '/admin', label: 'Dashboard', icon: Home },
         { href: '/admin/accounts', label: 'Kelola Accounts', icon: Users },
         { href: '/admin/sessions', label: 'Sesi Latihan', icon: CalendarDays },
         { href: '/admin/monitoring', label: 'Monitoring', icon: ActivitySquare },
-        { href: '/admin/map', label: 'Peta Gerakan', icon: MapPin },
+
+        { href: '/admin/location', label: 'Lokasi Latihan', icon: MapPin },
     ];
-    
+
+    // Handler logout
+    async function handleLogout() {
+        await logoutAction();
+        router.replace("/login");
+    }
+
     return (
         <SidebarProvider className="flex h-screen gap-4 bg-gray-100 p-4 dark:bg-zinc-950">
             <Sidebar variant="inset">
@@ -30,9 +39,9 @@ export default function AdminLayout({ children }) {
                     <SidebarMenu>
                         {menuItems.map(item => (
                             <SidebarMenuItem key={item.href}>
-                                <SidebarMenuButton 
+                                <SidebarMenuButton
                                     asChild
-                                    isActive={pathname === item.href} 
+                                    isActive={pathname === item.href}
                                     tooltip={item.label}
                                 >
                                     <Link href={item.href}>
@@ -49,20 +58,20 @@ export default function AdminLayout({ children }) {
 
                 <SidebarFooter>
                     <SidebarMenu>
-                        <SidebarMenuItem>
+                        {/* <SidebarMenuItem>
                             <SidebarMenuButton asChild isActive={pathname === '/admin/settings'} tooltip="Settings">
                                 <Link href="/admin/settings">
                                     <Settings className="h-5 w-5 mr-3" />
                                     <span>Settings</span>
                                 </Link>
                             </SidebarMenuButton>
-                        </SidebarMenuItem>
+                        </SidebarMenuItem> */}
                         <SidebarMenuItem>
-                            <SidebarMenuButton asChild href="/logout" tooltip="Logout">
-                                <Link href="/logout">
+                            <SidebarMenuButton asChild tooltip="Logout">
+                                <button type="button" onClick={handleLogout} className="flex items-center w-full">
                                     <LogOut className="h-5 w-5 mr-3" />
                                     <span>Logout</span>
-                                </Link>
+                                </button>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     </SidebarMenu>

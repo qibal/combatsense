@@ -6,8 +6,8 @@ import { Input } from '@/components/Shadcn/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/Shadcn/select';
 import { Label } from '@/components/Shadcn/label';
 import { Plus } from 'lucide-react';
-import { createUnit } from '@/actions/admin/unit_actions';
-import { createRank } from '@/actions/admin/rank_actions';
+import { createUnit } from '@/actions/admin/accounts/unit_actions';
+import { createRank } from '@/actions/admin/accounts/rank_actions';
 
 /**
  * Dynamic Form Component untuk Unit dan Rank
@@ -21,19 +21,19 @@ export function DynamicUnitSelect({ units, name = "unit_id" }) {
 
   const handleAddUnit = async () => {
     if (!newUnitName.trim()) return;
-    
+
     setIsAdding(true);
-    
+
     try {
       const result = await createUnit({ unit_name: newUnitName.trim() });
-      
+
       if (result.success) {
         // Update list unit dengan data baru
         const newUnit = result.data;
         setUnitList(prev => [...prev, newUnit]);
         setSelectedUnit(newUnit.unit_id.toString());
         setNewUnitName('');
-        
+
         // Set hidden input value untuk form utama
         const hiddenInput = document.querySelector(`input[name="${name}"]`);
         if (hiddenInput) {
@@ -63,19 +63,19 @@ export function DynamicUnitSelect({ units, name = "unit_id" }) {
             ))}
           </SelectContent>
         </Select>
-        
+
         {/* Inline form tambah unit */}
         <div className="flex gap-2">
-          <Input 
+          <Input
             value={newUnitName}
             onChange={(e) => setNewUnitName(e.target.value)}
-            placeholder="Ketik unit baru..." 
+            placeholder="Ketik unit baru..."
             className="flex-1"
             disabled={isAdding}
           />
-          <Button 
-            type="button" 
-            variant="outline" 
+          <Button
+            type="button"
+            variant="outline"
             size="sm"
             onClick={handleAddUnit}
             disabled={isAdding || !newUnitName.trim()}
@@ -85,7 +85,7 @@ export function DynamicUnitSelect({ units, name = "unit_id" }) {
           </Button>
         </div>
       </div>
-      
+
       {/* Hidden input untuk form submission */}
       <input type="hidden" name={name} value={selectedUnit} />
     </div>
@@ -100,19 +100,19 @@ export function DynamicRankSelect({ ranks, name = "rank_id" }) {
 
   const handleAddRank = async () => {
     if (!newRankName.trim()) return;
-    
+
     setIsAdding(true);
-    
+
     try {
       const result = await createRank({ rank_name: newRankName.trim() });
-      
+
       if (result.success) {
         // Update list rank dengan data baru
         const newRank = result.data;
         setRankList(prev => [...prev, newRank]);
         setSelectedRank(newRank.rank_id.toString());
         setNewRankName('');
-        
+
         // Set hidden input value untuk form utama
         const hiddenInput = document.querySelector(`input[name="${name}"]`);
         if (hiddenInput) {
@@ -142,19 +142,19 @@ export function DynamicRankSelect({ ranks, name = "rank_id" }) {
             ))}
           </SelectContent>
         </Select>
-        
+
         {/* Inline form tambah pangkat */}
         <div className="flex gap-2">
-          <Input 
+          <Input
             value={newRankName}
             onChange={(e) => setNewRankName(e.target.value)}
-            placeholder="Ketik pangkat baru..." 
+            placeholder="Ketik pangkat baru..."
             className="flex-1"
             disabled={isAdding}
           />
-          <Button 
-            type="button" 
-            variant="outline" 
+          <Button
+            type="button"
+            variant="outline"
             size="sm"
             onClick={handleAddRank}
             disabled={isAdding || !newRankName.trim()}
@@ -164,7 +164,7 @@ export function DynamicRankSelect({ ranks, name = "rank_id" }) {
           </Button>
         </div>
       </div>
-      
+
       {/* Hidden input untuk form submission */}
       <input type="hidden" name={name} value={selectedRank} />
     </div>
