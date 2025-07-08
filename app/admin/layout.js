@@ -13,7 +13,6 @@ export default function AdminLayout({ children }) {
         { href: '/admin', label: 'Dashboard', icon: Home },
         { href: '/admin/accounts', label: 'Kelola Accounts', icon: Users },
         { href: '/admin/sessions', label: 'Sesi Latihan', icon: CalendarDays },
-        { href: '/admin/monitoring', label: 'Monitoring', icon: ActivitySquare },
 
         { href: '/admin/location', label: 'Lokasi Latihan', icon: MapPin },
     ];
@@ -21,7 +20,7 @@ export default function AdminLayout({ children }) {
     // Handler logout
     async function handleLogout() {
         await logoutAction();
-        router.replace("/login");
+        router.replace("/");
     }
 
     return (

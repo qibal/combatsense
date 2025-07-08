@@ -1,9 +1,9 @@
 "use server";
 import { db } from "@/lib/db";
 import { users, training_sessions, session_commanders, session_participants, session_medics, training_locations, live_monitoring_stats } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, ne } from "drizzle-orm";
 
-import { and, notExists } from "drizzle-orm";
+import { notExists } from "drizzle-orm";
 // Get semua user dengan role tertentu
 export async function getUsersByRole(role) {
     const result = await db.select({
@@ -23,8 +23,45 @@ export async function getAllLocations() {
     }).from(training_locations);
 }
 
+// Cek konflik jadwal untuk prajurit
+export async function checkScheduleConflict(userIds, scheduledAt) {
+    try {
+        const conflicts = await db.select({
+            user_id: session_participants.user_id,
+            session_id: session_participants.session_id,
+            session_name: training_sessions.name,
+            scheduled_at: training_sessions.scheduled_at
+        })
+            .from(session_participants)
+            .innerJoin(training_sessions, eq(session_participants.session_id, training_sessions.id))
+            .where(
+                and(
+                    inArray(session_participants.user_id, userIds),
+                    eq(training_sessions.scheduled_at, scheduledAt),
+                    ne(training_sessions.status, 'dibatalkan')
+                )
+            );
+        return conflicts;
+    } catch (error) {
+        console.error('Error checking schedule conflict:', error);
+        return [];
+    }
+}
+
 export async function createSessionAction(form) {
     try {
+        // Cek konflik jadwal untuk prajurit
+        if (form.participants && form.participants.length > 0) {
+            const conflicts = await checkScheduleConflict(form.participants, form.scheduled_at);
+            if (conflicts.length > 0) {
+                const conflictUsers = conflicts.map(c => c.user_id).join(', ');
+                return {
+                    success: false,
+                    message: `Prajurit dengan ID ${conflictUsers} sudah memiliki sesi latihan di waktu yang sama.`
+                };
+            }
+        }
+
         // 1. Insert ke training_sessions
         const [session] = await db.insert(training_sessions).values({
             name: form.name,
@@ -110,31 +147,54 @@ export async function getAllSessions() {
 
     return sessionsWithDetails;
 }
-export async function getAvailableUsersByRole(role) {
+export async function getAvailableUsersByRole(role, scheduledAt = null) {
     // Cek di semua relasi, hanya ambil user yang tidak punya status "ikut" di sesi "berlangsung"
     let relasiTable;
     if (role === "komandan") relasiTable = session_commanders;
     else if (role === "medis") relasiTable = session_medics;
     else relasiTable = session_participants;
 
-    // Query: user yang tidak punya status "ikut" di relasi manapun
-    const result = await db.select()
-        .from(users)
-        .where(
-            and(
-                eq(users.role, role),
-                notExists(
-                    db.select()
-                        .from(relasiTable)
-                        .where(
-                            and(
-                                eq(relasiTable.user_id, users.id),
-                                eq(relasiTable.status, "ikut")
-                            )
+    // Query: user yang tidak punya sesi di waktu yang sama (jika scheduledAt diberikan)
+    let whereCondition;
+
+    if (scheduledAt) {
+        // Filter berdasarkan waktu yang dipilih
+        whereCondition = and(
+            eq(users.role, role),
+            notExists(
+                db.select()
+                    .from(relasiTable)
+                    .innerJoin(training_sessions, eq(relasiTable.session_id, training_sessions.id))
+                    .where(
+                        and(
+                            eq(relasiTable.user_id, users.id),
+                            eq(training_sessions.scheduled_at, scheduledAt),
+                            ne(training_sessions.status, 'dibatalkan')
                         )
-                )
+                    )
             )
         );
+    } else {
+        // Filter berdasarkan sesi aktif (behavior lama)
+        whereCondition = and(
+            eq(users.role, role),
+            notExists(
+                db.select()
+                    .from(relasiTable)
+                    .where(
+                        and(
+                            eq(relasiTable.user_id, users.id),
+                            eq(relasiTable.status, "ikut")
+                        )
+                    )
+            )
+        );
+    }
+
+    const result = await db.select()
+        .from(users)
+        .where(whereCondition);
+
     return result;
 }
 export async function getSessionById(id) {
@@ -168,7 +228,10 @@ export async function updateSessionAction(id, form) {
 export async function setSessionActive(id) {
     try {
         await db.update(training_sessions)
-            .set({ status: "berlangsung" })
+            .set({
+                status: "berlangsung",
+                actual_started_at: new Date().toISOString()
+            })
             .where(eq(training_sessions.id, id));
         return { success: true };
     } catch (err) {
@@ -192,7 +255,10 @@ export async function getSessionStats(sessionId) {
 export async function setSessionFinished(id) {
     try {
         await db.update(training_sessions)
-            .set({ status: "selesai" })
+            .set({
+                status: "selesai",
+                actual_ended_at: new Date().toISOString()
+            })
             .where(eq(training_sessions.id, id));
         return { success: true };
     } catch (err) {

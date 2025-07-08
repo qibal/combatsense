@@ -10,12 +10,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/S
 import Image from 'next/image';
 import { toast } from "sonner";
 import { createSessionAction, updateSessionAction } from "@/actions/komandan/sessions_actions";
+import { getAvailableUsersByRole } from "@/actions/komandan/sessions_actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/Shadcn/popover";
 import { Calendar } from "@/components/Shadcn/calendar";
 import { Label } from "@/components/Shadcn/label";
 import { ChevronDownIcon } from "lucide-react";
+import { useRouter } from 'next/navigation';
 
 export default function CreateSessionForm({ komandan, prajurit, medis, locations, initialData }) {
+    const router = useRouter();
     const [form, setForm] = useState({
         name: "",
         description: "",
@@ -31,6 +34,9 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
     const [date, setDate] = useState(null);
     const [time, setTime] = useState("");
     const [open, setOpen] = useState(false);
+    const [availableKomandan, setAvailableKomandan] = useState([]);
+    const [availablePrajurit, setAvailablePrajurit] = useState([]);
+    const [availableMedis, setAvailableMedis] = useState([]);
 
     useEffect(() => {
         if (initialData) {
@@ -61,12 +67,31 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
             scheduled.setHours(Number(hours));
             scheduled.setMinutes(Number(minutes));
             scheduled.setSeconds(0);
+            const scheduledAt = scheduled.toISOString();
             setForm(f => ({
                 ...f,
-                scheduled_at: scheduled.toISOString(),
+                scheduled_at: scheduledAt,
             }));
+            // Fetch user yang senggang di waktu yang dipilih
+            fetchAvailableUsers(scheduledAt);
         }
     }, [date, time]);
+
+    // Fungsi untuk fetch user yang senggang
+    const fetchAvailableUsers = async (scheduledAt) => {
+        try {
+            const [komandanData, prajuritData, medisData] = await Promise.all([
+                getAvailableUsersByRole("komandan", scheduledAt),
+                getAvailableUsersByRole("prajurit", scheduledAt),
+                getAvailableUsersByRole("medis", scheduledAt)
+            ]);
+            setAvailableKomandan(komandanData);
+            setAvailablePrajurit(prajuritData);
+            setAvailableMedis(medisData);
+        } catch (error) {
+            console.error('Error fetching available users:', error);
+        }
+    };
 
     // Handler multi-select
     const handleMultiSelect = (role, id) => {
@@ -112,8 +137,16 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
                 medics: [],
             });
             setSelectedLocation(null);
+            if (!initialData || !initialData.id) {
+                router.push('/komandan');
+            }
         } else {
-            toast.error(res.message || "Gagal menyimpan sesi latihan");
+            // Tampilkan pesan error yang lebih spesifik untuk konflik jadwal
+            if (res.message && res.message.includes('sudah memiliki sesi latihan')) {
+                toast.error(res.message + " Silakan pilih waktu yang berbeda atau hapus sesi yang konflik.");
+            } else {
+                toast.error(res.message || "Gagal menyimpan sesi latihan");
+            }
         }
         setLoading(false);
     };
@@ -235,6 +268,11 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
             {/* Pilih Peserta */}
             <div>
                 <label className="font-semibold">Pilih Peserta Sesi</label>
+                {date && time && (
+                    <p className="text-sm text-blue-600 mb-2">
+                        Menampilkan user yang senggang pada {new Date(form.scheduled_at).toLocaleString("id-ID")}
+                    </p>
+                )}
                 <Tabs defaultValue="komandan" className="w-full mt-2">
                     <TabsList>
                         <TabsTrigger value="komandan">Komandan</TabsTrigger>
@@ -243,7 +281,7 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
                     </TabsList>
                     <TabsContent value="komandan">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-2">
-                            {komandan.map(u => (
+                            {availableKomandan.map(u => (
                                 <Card
                                     key={u.id}
                                     className={`cursor-pointer border-2 ${form.commanders.includes(u.id) ? "border-blue-500" : "border-transparent"}`}
@@ -262,12 +300,12 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
                                     </CardContent>
                                 </Card>
                             ))}
-                            {komandan.length === 0 && <span className="text-gray-400">Tidak ada komandan luang</span>}
+                            {availableKomandan.length === 0 && <span className="text-gray-400">Tidak ada komandan senggang di waktu ini</span>}
                         </div>
                     </TabsContent>
                     <TabsContent value="prajurit">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-2">
-                            {prajurit.map(u => (
+                            {availablePrajurit.map(u => (
                                 <Card
                                     key={u.id}
                                     className={`cursor-pointer border-2 ${form.participants.includes(u.id) ? "border-blue-500" : "border-transparent"}`}
@@ -286,12 +324,12 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
                                     </CardContent>
                                 </Card>
                             ))}
-                            {prajurit.length === 0 && <span className="text-gray-400">Tidak ada prajurit luang</span>}
+                            {availablePrajurit.length === 0 && <span className="text-gray-400">Tidak ada prajurit senggang di waktu ini</span>}
                         </div>
                     </TabsContent>
                     <TabsContent value="medis">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-2">
-                            {medis.map(u => (
+                            {availableMedis.map(u => (
                                 <Card
                                     key={u.id}
                                     className={`cursor-pointer border-2 ${form.medics.includes(u.id) ? "border-blue-500" : "border-transparent"}`}
@@ -310,7 +348,7 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
                                     </CardContent>
                                 </Card>
                             ))}
-                            {medis.length === 0 && <span className="text-gray-400">Tidak ada medis luang</span>}
+                            {availableMedis.length === 0 && <span className="text-gray-400">Tidak ada medis senggang di waktu ini</span>}
                         </div>
                     </TabsContent>
                 </Tabs>

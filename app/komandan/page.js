@@ -10,6 +10,7 @@ import { Input } from '@/components/Shadcn/input';
 import { setSessionActive } from "@/actions/komandan/sessions_actions";
 import MiniMapbox from "@/components/komandan/MiniMapbox";
 import { setSessionCancelled } from "@/actions/komandan/sessions_actions";
+import { logoutAction } from "@/actions/auth/logout";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/Shadcn/select';
 import {
@@ -31,7 +32,8 @@ import {
   WifiOff,
   FileText,
   Users,
-  Calendar
+  Calendar,
+  LogOut
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -410,11 +412,32 @@ export default function KomandanDashboard() {
     p.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Handler untuk logout
+  const handleLogout = async () => {
+    try {
+      await logoutAction();
+      router.push('/');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Tetap redirect meski ada error
+      router.push('/');
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
       <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-6 bg-white border-b border-gray-200 dark:bg-gray-950 dark:border-gray-800">
         <h1 className="text-xl font-semibold">Dashboard Komandan</h1>
         <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2"
+          >
+            <LogOut size={16} />
+            Logout
+          </Button>
           <Avatar>
             <AvatarImage src="/avatars/komandan.jpg" />
             <AvatarFallback>K</AvatarFallback>
@@ -449,6 +472,19 @@ export default function KomandanDashboard() {
                         <p className="font-semibold">{session.name}</p>
                         <p className="text-sm text-gray-500">
                           {session.location?.name || "-"} - {new Date(session.scheduled_at).toLocaleString("id-ID")}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Jadwal: {new Date(session.scheduled_at).toLocaleString("id-ID")}
+                          {session.actual_started_at && (
+                            <span className="ml-2 text-blue-600">
+                              | Mulai Aktual: {new Date(session.actual_started_at).toLocaleString("id-ID")}
+                            </span>
+                          )}
+                          {session.actual_ended_at && (
+                            <span className="ml-2 text-green-600">
+                              | Selesai Aktual: {new Date(session.actual_ended_at).toLocaleString("id-ID")}
+                            </span>
+                          )}
                         </p>
                         <p className="text-xs text-gray-400">Status: {session.status}</p>
                       </div>

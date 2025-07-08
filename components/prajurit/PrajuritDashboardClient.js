@@ -10,13 +10,15 @@ import { Progress } from '@/components/Shadcn/progress';
 import { Label } from '@/components/Shadcn/label';
 import { Separator } from '@/components/Shadcn/separator';
 import {
-    User, Activity, Calendar, Heart, Clock, Users, Play, MapPin, Wifi, WifiOff
+    User, Activity, Calendar, Heart, Clock, Users, Play, MapPin, Wifi, WifiOff, LogOut
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Map, { Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { ChartContainer } from '@/components/Shadcn/chart';
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import { logoutAction } from "@/actions/auth/logout";
 
 export default function PrajuritDashboardClient({
     initialProfile = {},
@@ -25,12 +27,25 @@ export default function PrajuritDashboardClient({
     initialAvailableSessions = [],
     initialTrainingHistory = []
 }) {
+    const router = useRouter();
     const [activeTab, setActiveTab] = useState("profile");
     const [isDeviceConnected, setIsDeviceConnected] = useState(false);
     const [monitoringStats, setMonitoringStats] = useState({});
     const [lastPosition, setLastPosition] = useState({ lat: -6.1754, lng: 106.8272 });
     const [heartRateData, setHeartRateData] = useState([]);
     const [speedData, setSpeedData] = useState([]);
+
+    // Handler untuk logout
+    const handleLogout = async () => {
+        try {
+            await logoutAction();
+            router.push('/');
+        } catch (error) {
+            console.error('Error during logout:', error);
+            // Tetap redirect meski ada error
+            router.push('/');
+        }
+    };
 
     // Helper badge
     const getPerformanceBadge = (performance) => {
@@ -48,64 +63,65 @@ export default function PrajuritDashboardClient({
         let interval;
         if (isDeviceConnected) {
             interval = setInterval(() => {
-                // Ambil posisi terakhir, default di tengah Monas
-                let prevLat = lastPosition.lat;
-                let prevLng = lastPosition.lng;
+                // Ambil posisi terakhir menggunakan functional update
+                setLastPosition(prevPosition => {
+                    let prevLat = prevPosition.lat;
+                    let prevLng = prevPosition.lng;
 
-                // Simulasi kecepatan lari (7-18 km/jam)
-                const speed = 7 + Math.random() * 11;
-                const speedMs = speed / 3.6; // konversi ke m/s
+                    // Simulasi kecepatan lari (7-18 km/jam)
+                    const speed = 7 + Math.random() * 11;
+                    const speedMs = speed / 3.6; // konversi ke m/s
 
-                // 1 derajat latitude ~ 111.32 km, longitude tergantung latitude
-                const meterToDegLat = 1 / 111320;
-                const meterToDegLng = 1 / (111320 * Math.cos(prevLat * Math.PI / 180));
+                    // 1 derajat latitude ~ 111.32 km, longitude tergantung latitude
+                    const meterToDegLat = 1 / 111320;
+                    const meterToDegLng = 1 / (111320 * Math.cos(prevLat * Math.PI / 180));
 
-                // Langkah per detik
-                const step = speedMs; // meter per detik
-                const angle = Math.random() * 2 * Math.PI;
-                let lat = prevLat + Math.sin(angle) * step * meterToDegLat;
-                let lng = prevLng + Math.cos(angle) * step * meterToDegLng;
+                    // Langkah per detik
+                    const step = speedMs; // meter per detik
+                    const angle = Math.random() * 2 * Math.PI;
+                    let lat = prevLat + Math.sin(angle) * step * meterToDegLat;
+                    let lng = prevLng + Math.cos(angle) * step * meterToDegLng;
 
-                // Jika terlalu jauh dari Monas (>200m), arahkan balik ke tengah
-                const dist = Math.sqrt(Math.pow((lat + 6.1754) * 111320, 2) + Math.pow((lng - 106.8272) * 111320, 2));
-                if (dist > 200) {
-                    lat = -6.1754 + (Math.random() - 0.5) * 0.001;
-                    lng = 106.8272 + (Math.random() - 0.5) * 0.001;
-                }
+                    // Jika terlalu jauh dari Monas (>200m), arahkan balik ke tengah
+                    const dist = Math.sqrt(Math.pow((lat + 6.1754) * 111320, 2) + Math.pow((lng - 106.8272) * 111320, 2));
+                    if (dist > 200) {
+                        lat = -6.1754 + (Math.random() - 0.5) * 0.001;
+                        lng = 106.8272 + (Math.random() - 0.5) * 0.001;
+                    }
 
-                setLastPosition({ lat, lng });
+                    // Simulasi statistik lain
+                    const heartRate = 90 + Math.round(Math.random() * 30);
+                    let status = "sehat";
+                    if (heartRate > 110) status = "lelah";
+                    if (heartRate > 120) status = "bahaya";
 
-                // Simulasi statistik lain
-                const heartRate = 90 + Math.round(Math.random() * 30);
-                let status = "sehat";
-                if (heartRate > 110) status = "lelah";
-                if (heartRate > 120) status = "bahaya";
+                    const currentTime = new Date().toLocaleTimeString('id-ID', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
 
-                const currentTime = new Date().toLocaleTimeString('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
+                    setMonitoringStats({
+                        heartRate,
+                        speed,
+                        lat,
+                        lng,
+                        status
+                    });
+
+                    // Update chart data
+                    setHeartRateData(prev => {
+                        const newData = [...prev, { time: currentTime, heartRate }];
+                        return newData.slice(-20); // Keep last 20 data points
+                    });
+
+                    setSpeedData(prev => {
+                        const newData = [...prev, { time: currentTime, speed: parseFloat(speed.toFixed(1)) }];
+                        return newData.slice(-20); // Keep last 20 data points
+                    });
+
+                    return { lat, lng };
                 });
-
-                setMonitoringStats({
-                    heartRate,
-                    speed,
-                    lat,
-                    lng,
-                    status
-                });
-
-                // Update chart data
-                setHeartRateData(prev => {
-                    const newData = [...prev, { time: currentTime, heartRate }];
-                    return newData.slice(-20); // Keep last 20 data points
-                });
-
-                setSpeedData(prev => {
-                    const newData = [...prev, { time: currentTime, speed: parseFloat(speed.toFixed(1)) }];
-                    return newData.slice(-20); // Keep last 20 data points
-                });
-
             }, 1000);
         } else {
             setMonitoringStats({});
@@ -114,7 +130,7 @@ export default function PrajuritDashboardClient({
             setSpeedData([]);
         }
         return () => clearInterval(interval);
-    }, [isDeviceConnected, lastPosition]);
+    }, [isDeviceConnected]); // Hapus lastPosition dari dependency array
 
     const getStatusBadge = (status) => {
         switch (status) {
@@ -125,11 +141,11 @@ export default function PrajuritDashboardClient({
         }
     };
 
-    // Safe access helpers
+    // Safe access helpers dengan validasi tambahan
     const profile = initialProfile || {};
-    const medicalHistory = initialMedicalHistory || [];
-    const availableSessions = initialAvailableSessions || [];
-    const trainingHistory = initialTrainingHistory || [];
+    const medicalHistory = Array.isArray(initialMedicalHistory) ? initialMedicalHistory : [];
+    const availableSessions = Array.isArray(initialAvailableSessions) ? initialAvailableSessions : [];
+    const trainingHistory = Array.isArray(initialTrainingHistory) ? initialTrainingHistory : [];
 
     return (
         <div className="min-h-screen bg-gray-50 p-6">
@@ -139,10 +155,21 @@ export default function PrajuritDashboardClient({
                         <h1 className="text-3xl font-bold text-gray-900">Dashboard Prajurit</h1>
                         <p className="text-gray-600">Selamat datang, {profile.name || 'Prajurit'}</p>
                     </div>
-                    <Badge variant="outline" className="px-3 py-1">
-                        <Clock className="h-4 w-4 mr-1" />
-                        {new Date().toLocaleDateString('id-ID')}
-                    </Badge>
+                    <div className="flex items-center gap-4">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleLogout}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2"
+                        >
+                            <LogOut size={16} />
+                            Logout
+                        </Button>
+                        <Badge variant="outline" className="px-3 py-1">
+                            <Clock className="h-4 w-4 mr-1" />
+                            {new Date().toLocaleDateString('id-ID')}
+                        </Badge>
+                    </div>
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -222,8 +249,8 @@ export default function PrajuritDashboardClient({
                     <TabsContent value="sessions" className="space-y-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5" />Sesi Latihan Tersedia</CardTitle>
-                                <CardDescription>Pilih sesi latihan yang ingin Anda ikuti</CardDescription>
+                                <CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5" />Jadwal Sesi Latihan</CardTitle>
+                                <CardDescription>Jadwal sesi latihan yang telah ditentukan oleh komandan</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="grid gap-4">
@@ -247,11 +274,13 @@ export default function PrajuritDashboardClient({
                                                         <Users className="h-4 w-4" /><span className="text-sm">{session.participants || 0}/{session.maxParticipants || 20} peserta</span>
                                                         <Progress value={((session.participants || 0) / (session.maxParticipants || 20)) * 100} className="w-24 h-2" />
                                                     </div>
-                                                    <Button disabled={session.status !== 'direncanakan'} className="flex items-center gap-2"><Play className="h-4 w-4" />Ikut Sesi</Button>
+                                                    <Badge variant={session.status === 'direncanakan' ? 'default' : session.status === 'berlangsung' ? 'secondary' : 'outline'}>
+                                                        {session.status === 'direncanakan' ? 'Direncanakan' : session.status === 'berlangsung' ? 'Sedang Berlangsung' : session.status}
+                                                    </Badge>
                                                 </div>
                                             </CardContent>
                                         </Card>
-                                    )) : <p className="text-sm text-center text-gray-500 py-4">Belum ada sesi latihan tersedia.</p>}
+                                    )) : <p className="text-sm text-center text-gray-500 py-4">Belum ada jadwal sesi latihan yang ditentukan komandan.</p>}
                                 </div>
                             </CardContent>
                         </Card>
@@ -279,7 +308,7 @@ export default function PrajuritDashboardClient({
                                                     <div className="grid grid-cols-3 gap-4 mb-3">
                                                         <div className="text-center"><p className="text-xs text-gray-600">Avg HR</p><p className="text-lg font-semibold text-red-600">{session.myStats?.avgHeartRate || 'N/A'} BPM</p></div>
                                                         <div className="text-center"><p className="text-xs text-gray-600">Jarak</p><p className="text-lg font-semibold text-blue-600">{session.myStats?.totalDistance || 'N/A'} km</p></div>
-                                                        <div className="text-center"><p className="text-xs text-gray-600">Performa</p><div className="mt-1">{getPerformanceBadge(session.myStats?.performance)}</div></div>
+                                                        <div className="text-center"><p className="text-xs text-gray-600">Performa</p><div className="mt-1">{getPerformanceBadge(session.myStats?.performance || 'baik')}</div></div>
                                                     </div>
                                                 </CardContent>
                                             </Card>

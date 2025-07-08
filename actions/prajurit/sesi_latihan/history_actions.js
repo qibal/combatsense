@@ -14,11 +14,9 @@ export async function getTrainingHistory() {
             date: training_sessions.scheduled_at,
             duration: sql`'2 jam'`, // Temporary - nanti bisa dihitung dari data
             // Statistik dummy untuk saat ini, karena perlu agregasi kompleks
-            myStats: {
-                avgHeartRate: 100,
-                totalDistance: 5.2,
-                performance: 'baik'
-            }
+            avgHeartRate: sql`100`,
+            totalDistance: sql`5.2`,
+            performance: sql`'baik'`
         })
             .from(session_participants)
             .leftJoin(training_sessions, eq(session_participants.session_id, training_sessions.id))
@@ -27,7 +25,30 @@ export async function getTrainingHistory() {
                 eq(training_sessions.status, 'selesai') // Hanya ambil sesi yang sudah selesai
             ));
 
-        return { success: true, data: history };
+        // Pastikan data aman untuk serialisasi
+        const safeHistory = history.map(item => ({
+            id: item.id,
+            sessionName: item.sessionName,
+            date: item.date ? new Date(item.date).toISOString() : null,
+            duration: item.duration,
+            myStats: {
+                avgHeartRate: item.avgHeartRate || 0,
+                totalDistance: item.totalDistance || 0,
+                performance: item.performance || 'baik'
+            }
+        }));
+
+        // Validasi serialisasi untuk memastikan data aman
+        try {
+            JSON.stringify(safeHistory);
+            return { success: true, data: safeHistory };
+        } catch (serializeError) {
+            console.error("Error serializing training history:", serializeError);
+            return {
+                success: false,
+                message: "Terjadi kesalahan saat memproses data histori latihan."
+            };
+        }
 
     } catch (error) {
         console.error("Error fetching training history:", error);
@@ -66,25 +87,37 @@ export async function getHistoryDetail(sessionId) {
             orderBy: (stats, { asc }) => [asc(stats.timestamp)], // Urutkan berdasarkan waktu
         });
 
+        // Pastikan data timestamp dikonversi ke string untuk serialisasi yang aman
         const response = {
             id: sessionDetails.id,
             name: sessionDetails.name,
             description: sessionDetails.description,
-            scheduled_at: sessionDetails.scheduled_at,
+            scheduled_at: sessionDetails.scheduled_at ? new Date(sessionDetails.scheduled_at).toISOString() : null,
             status: sessionDetails.status,
             commander_name: 'Komandan Default', // Temporary - nanti bisa diambil dari session_commanders
             location_name: sessionDetails.location?.name || 'N/A',
             statistics: statistics.map(s => ({
-                timestamp: s.timestamp,
-                heart_rate: s.heart_rate,
-                speed_kph: s.speed_kph,
-                latitude: s.latitude,
-                longitude: s.longitude,
+                timestamp: s.timestamp ? new Date(s.timestamp).toISOString() : null,
+                heart_rate: s.heart_rate || 0,
+                speed_kph: s.speed_kph || 0,
+                latitude: s.latitude ? parseFloat(s.latitude) : null,
+                longitude: s.longitude ? parseFloat(s.longitude) : null,
                 user_id: s.user_id
             }))
         };
 
-        return { success: true, data: response };
+        // Validasi tambahan untuk memastikan data aman untuk serialisasi
+        try {
+            // Test serialisasi untuk memastikan tidak ada circular reference
+            JSON.stringify(response);
+            return { success: true, data: response };
+        } catch (serializeError) {
+            console.error("Error serializing response:", serializeError);
+            return {
+                success: false,
+                message: "Terjadi kesalahan saat memproses data histori."
+            };
+        }
 
     } catch (error) {
         console.error(`Error fetching history detail for session ${sessionId}:`, error);

@@ -56,15 +56,27 @@ export default function HistoryDetailClient({ historyData, error }) {
     }
 
     if (!historyData) {
-        return <div>Loading...</div>; // Atau tampilkan skeleton loader
+        return (
+            <div className="flex flex-col items-center justify-center h-full">
+                <p className="text-gray-500">Data tidak ditemukan</p>
+                <Button onClick={() => router.back()} variant="outline" className="mt-4">
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
+                </Button>
+            </div>
+        );
     }
 
     // Fungsi untuk memformat tanggal
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleDateString('id-ID', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-        });
+        try {
+            return new Date(dateString).toLocaleDateString('id-ID', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+            });
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'N/A';
+        }
     }
 
     return (
@@ -132,7 +144,13 @@ export default function HistoryDetailClient({ historyData, error }) {
                 </CardHeader>
                 <CardContent className="max-h-60 overflow-auto">
                     <pre className="text-xs bg-gray-100 p-2 rounded">
-                        {JSON.stringify(historyData.statistics || [], null, 2)}
+                        {(() => {
+                            try {
+                                return JSON.stringify(historyData.statistics || [], null, 2);
+                            } catch (error) {
+                                return 'Error serializing data: ' + error.message;
+                            }
+                        })()}
                     </pre>
                 </CardContent>
             </Card>

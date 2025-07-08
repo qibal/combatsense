@@ -10,6 +10,7 @@ import Map, { Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/Shadcn/card';
 import { MapPin, Search } from 'lucide-react';
+import { useState as useStateReact } from 'react';
 
 export default function FormLocationPage() {
     const [form, setForm] = useState({
@@ -35,6 +36,7 @@ export default function FormLocationPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const id = searchParams.get("id");
+    const [error, setError] = useState("");
 
     // Fetch data lokasi jika edit
     useEffect(() => {
@@ -116,17 +118,26 @@ export default function FormLocationPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setUploading(true);
+        setError("");
 
         let imageUrl = form.map_image_url;
         const file = inputFileRef.current?.files?.[0];
         if (file) {
             // Upload ke Vercel Blob
-            const response = await fetch(`/api/admin/location/upload?filename=${file.name}`, {
-                method: 'POST',
-                body: file,
-            });
-            const blob = await response.json();
-            imageUrl = blob.url;
+            try {
+                const response = await fetch(`/api/admin/location/upload?filename=${file.name}`, {
+                    method: 'POST',
+                    body: file,
+                });
+                if (!response.ok) throw new Error('Gagal upload gambar');
+                const blob = await response.json();
+                imageUrl = blob.url;
+            } catch (err) {
+                setError('Gagal upload gambar');
+                setUploading(false);
+                console.log('Upload error:', err);
+                return;
+            }
         }
 
         const payload = {
@@ -136,13 +147,16 @@ export default function FormLocationPage() {
 
         try {
             if (id) {
+                console.log('Update lokasi', id, payload);
                 await updateLocation(id, payload);
             } else {
+                console.log('Create lokasi', payload);
                 await createLocation(payload);
             }
             router.push('/admin/location');
         } catch (error) {
             console.error('Error saving location:', error);
+            setError('Gagal menyimpan lokasi. Cek koneksi atau data!');
         } finally {
             setUploading(false);
         }
@@ -151,6 +165,9 @@ export default function FormLocationPage() {
     return (
         <div className="max-w-7xl mx-auto py-8 px-4">
             <h2 className="text-2xl font-bold mb-6">{id ? "Edit Lokasi" : "Tambah Lokasi"}</h2>
+            {error && (
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Form Section - Left Column */}
@@ -212,7 +229,12 @@ export default function FormLocationPage() {
                             </div>
 
                             <div className="flex gap-2">
-                                <Button type="submit" disabled={uploading} className="flex-1">
+                                <Button
+                                    type="submit"
+                                    disabled={uploading}
+                                    className="flex-1"
+                                    onClick={handleSubmit}
+                                >
                                     {uploading ? "Menyimpan..." : id ? "Update Lokasi" : "Tambah Lokasi"}
                                 </Button>
                                 <Button
@@ -272,6 +294,8 @@ export default function FormLocationPage() {
                                     touchZoomRotate={true}
                                     keyboard={true}
                                     boxZoom={true}
+                                    onMove={evt => setViewState(evt.viewState)}
+                                    viewState={viewState}
                                 >
                                     <Marker
                                         longitude={selectedLocation.lng}
