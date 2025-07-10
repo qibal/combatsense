@@ -16,7 +16,7 @@ import { UserPlus, Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from "sonner";
 
 // Import server actions
-import { getFullUsersData, upsertUser, deleteUser } from '@/actions/admin/accounts/users_actions';
+import { getFullUsersData, upsertUser, deleteUser, insertDummyUser } from '@/actions/admin/accounts/users_actions';
 import { getRanks, addRank, updateRank, deleteRank } from '@/actions/admin/accounts/rank_actions';
 import { getUnits, addUnit, updateUnit, deleteUnit } from '@/actions/admin/accounts/unit_actions';
 
@@ -36,6 +36,30 @@ export default function AccountsPage() {
     const [editingUser, setEditingUser] = useState(null);
     const [editingUnit, setEditingUnit] = useState(null);
     const [editingRank, setEditingRank] = useState(null);
+
+    // State filter
+    const [filterRank, setFilterRank] = useState('');
+    const [filterUnit, setFilterUnit] = useState('');
+    const [filterLetter, setFilterLetter] = useState('');
+    const [showYoungest, setShowYoungest] = useState(false);
+    const [showOldest, setShowOldest] = useState(false);
+
+    // Tambahkan state untuk dropdown dummy role
+    const [dummyRole, setDummyRole] = useState('prajurit');
+
+    // Filtered users
+    let filteredUsers = users;
+    if (filterRank) filteredUsers = filteredUsers.filter(u => String(u.rank_id) === String(filterRank));
+    if (filterUnit) filteredUsers = filteredUsers.filter(u => String(u.unit_id) === String(filterUnit));
+    if (filterLetter) filteredUsers = filteredUsers.filter(u => (u.full_name || '').toUpperCase().startsWith(filterLetter));
+    if (showYoungest) {
+        const youngest = divideAndConquerAge(filteredUsers, 'youngest');
+        filteredUsers = youngest ? [youngest] : [];
+    }
+    if (showOldest) {
+        const oldest = divideAndConquerAge(filteredUsers, 'oldest');
+        filteredUsers = oldest ? [oldest] : [];
+    }
 
     // Fetch initial data
     async function fetchData() {
@@ -134,6 +158,56 @@ export default function AccountsPage() {
                 <p className="text-gray-500 dark:text-gray-400">Kelola pengguna, unit, dan pangkat dalam sistem.</p>
             </div>
 
+            {/* FILTER BAR */}
+            <div className="flex flex-wrap gap-2 items-center mb-2">
+                <span className="font-semibold">Filter:</span>
+                {/* Filter huruf A-Z */}
+                <div className="flex gap-1">
+                    {[...Array(26)].map((_, i) => {
+                        const letter = String.fromCharCode(65 + i);
+                        return (
+                            <Button key={letter} size="sm" variant={filterLetter === letter ? 'default' : 'outline'} onClick={() => setFilterLetter(filterLetter === letter ? '' : letter)}>{letter}</Button>
+                        );
+                    })}
+                </div>
+                {/* Filter pangkat */}
+                <Select value={filterRank} onValueChange={v => setFilterRank(v === 'all' ? '' : v)}>
+                    <SelectTrigger className="w-32"><SelectValue placeholder="Pangkat" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Semua Pangkat</SelectItem>
+                        {ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                {/* Filter unit */}
+                <Select value={filterUnit} onValueChange={v => setFilterUnit(v === 'all' ? '' : v)}>
+                    <SelectTrigger className="w-32"><SelectValue placeholder="Unit" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Semua Unit</SelectItem>
+                        {units.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                {/* Filter usia termuda/tertua */}
+                <Button size="sm" variant={showYoungest ? 'default' : 'outline'} onClick={() => { setShowYoungest(!showYoungest); setShowOldest(false); }}>Usia Termuda</Button>
+                <Button size="sm" variant={showOldest ? 'default' : 'outline'} onClick={() => { setShowOldest(!showOldest); setShowYoungest(false); }}>Usia Tertua</Button>
+                {/* Reset filter */}
+                <Button size="sm" variant="ghost" onClick={() => { setFilterRank(''); setFilterUnit(''); setFilterLetter(''); setShowYoungest(false); setShowOldest(false); }}>Reset</Button>
+                {/* Tombol tambah dummy user */}
+                <Select value={dummyRole} onValueChange={setDummyRole}>
+                    <SelectTrigger className="w-32"><SelectValue placeholder="Role Dummy" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="prajurit">Prajurit</SelectItem>
+                        <SelectItem value="komandan">Komandan</SelectItem>
+                        <SelectItem value="medis">Medis</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Button size="sm" variant="default" onClick={async () => {
+                    const res = await insertDummyUser(dummyRole);
+                    toast[res.success ? 'success' : 'error'](res.message);
+                    if (res.success) fetchData();
+                }}>Tambah Dummy User</Button>
+            </div>
+            {/* END FILTER BAR */}
+
             <UserFormDialog
                 isOpen={isUserFormOpen}
                 setIsOpen={setIsUserFormOpen}
@@ -188,18 +262,20 @@ export default function AccountsPage() {
                                             <TableHead>Role</TableHead>
                                             <TableHead>Unit</TableHead>
                                             <TableHead>Pangkat</TableHead>
+                                            <TableHead>Usia</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead className="text-right">Aksi</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {users.map((user) => (
+                                        {filteredUsers.map((user) => (
                                             <TableRow key={user.id}>
                                                 <TableCell className="font-medium whitespace-nowrap">{user.full_name}</TableCell>
                                                 <TableCell>{user.email}</TableCell>
                                                 <TableCell>{getRoleBadge(user.role)}</TableCell>
                                                 <TableCell className="whitespace-nowrap">{user.unit_name}</TableCell>
                                                 <TableCell>{user.rank_name}</TableCell>
+                                                <TableCell>{user.birth_date ? getAge(user.birth_date) + ' tahun' : '-'}</TableCell>
                                                 <TableCell>{getStatusBadge(user.is_active)}</TableCell>
                                                 <TableCell className="flex justify-end gap-2">
                                                     <Button variant="outline" size="icon" onClick={() => handleEditUserClick(user)}><Edit className="h-4 w-4" /></Button>
@@ -413,6 +489,10 @@ function UserFormDialog({ isOpen, setIsOpen, editingUser, setEditingUser, units,
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="birth_date" className="text-right">Tanggal Lahir</Label>
+                            <Input id="birth_date" type="date" value={formData.birth_date || ''} onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })} className="col-span-3" />
+                        </div>
                         <div className="flex items-center space-x-2">
                             <Switch id="is_active" checked={formData.is_active} onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })} />
                             <Label htmlFor="is_active">Aktif</Label>
@@ -539,4 +619,38 @@ function RankFormDialog({ isOpen, setIsOpen, editingRank, setEditingRank, onFini
             </DialogContent>
         </Dialog>
     );
+}
+
+function getAge(birthDateStr) {
+    if (!birthDateStr) return '-';
+    const today = new Date();
+    const birthDate = new Date(birthDateStr);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
+}
+
+// Divide and conquer untuk mencari user termuda/tertua
+function divideAndConquerAge(users, mode = 'youngest') {
+    if (!users || users.length === 0) return null;
+    if (users.length === 1) return users[0];
+    const mid = Math.floor(users.length / 2);
+    const left = divideAndConquerAge(users.slice(0, mid), mode);
+    const right = divideAndConquerAge(users.slice(mid), mode);
+    if (!left) return right;
+    if (!right) return left;
+    if (!left.birth_date) return right;
+    if (!right.birth_date) return left;
+    const leftDate = new Date(left.birth_date);
+    const rightDate = new Date(right.birth_date);
+    if (mode === 'youngest') {
+        // Termuda = tanggal lahir paling akhir
+        return leftDate > rightDate ? left : right;
+    } else {
+        // Tertua = tanggal lahir paling awal
+        return leftDate < rightDate ? left : right;
+    }
 } 

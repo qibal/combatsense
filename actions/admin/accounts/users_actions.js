@@ -16,6 +16,7 @@ const UserSchema = z.object({
     rank_id: z.coerce.number({ invalid_type_error: 'Pangkat diperlukan.' }).min(1, 'Pangkat diperlukan.'),
     unit_id: z.coerce.number({ invalid_type_error: 'Unit diperlukan.' }).min(1, 'Unit diperlukan.'),
     is_active: z.boolean().default(true),
+    birth_date: z.string().optional().nullable(), // Tambah validasi birth_date (string ISO, opsional)
 });
 
 /**
@@ -33,6 +34,7 @@ export async function getFullUsersData() {
             rank_name: ranks.name,
             rank_id: ranks.id,
             unit_id: units.id,
+            birth_date: users.birth_date, // Tambah birth_date ke hasil select
         })
             .from(users)
             .leftJoin(units, eq(users.unit_id, units.id))
@@ -72,7 +74,7 @@ export async function upsertUser(userId, data) {
         };
     }
 
-    const { full_name, email, password, role, rank_id, unit_id, is_active } = validatedFields.data;
+    const { full_name, email, password, role, rank_id, unit_id, is_active, birth_date } = validatedFields.data;
 
     try {
         if (userId) {
@@ -82,6 +84,7 @@ export async function upsertUser(userId, data) {
             if (password) {
                 updateData.password_hash = await bcrypt.hash(password, 10);
             }
+            if (birth_date) updateData.birth_date = birth_date;
 
             await db.update(users).set(updateData).where(eq(users.id, userId));
             revalidatePath('/admin/accounts');
@@ -97,7 +100,8 @@ export async function upsertUser(userId, data) {
                 role,
                 rank_id,
                 unit_id,
-                is_active
+                is_active,
+                birth_date: birth_date || null
             });
             revalidatePath('/admin/accounts');
             return { success: true, message: 'Pengguna berhasil ditambahkan.' };
@@ -127,5 +131,56 @@ export async function deleteUser(userId) {
     } catch (error) {
         console.error("Error deleting user:", error);
         return { success: false, message: 'Gagal menghapus pengguna.' };
+    }
+}
+
+export async function insertDummyUser(role) {
+    // Validasi role
+    const allowedRoles = ['prajurit', 'komandan', 'medis'];
+    if (!allowedRoles.includes(role)) {
+        return { success: false, message: 'Role tidak valid.' };
+    }
+    // Ambil unit dan rank pertama
+    const unit = await db.select().from(units).limit(1);
+    const rank = await db.select().from(ranks).limit(1);
+    if (!unit.length || !rank.length) {
+        return { success: false, message: 'Unit atau pangkat belum ada di database.' };
+    }
+    const password = role === 'prajurit' ? 'prajurit123' : role === 'komandan' ? 'komandan123' : 'medis123';
+    const password_hash = await bcrypt.hash(password, 10);
+    const now = Date.now();
+    const email = `${role}${now}@dummy.com`;
+    const full_name = `${role.charAt(0).toUpperCase() + role.slice(1)} Dummy ${now}`;
+
+    // Fungsi untuk generate birth_date random (usia 20-80 tahun)
+    function getRandomBirthDate() {
+        const today = new Date();
+        const minAge = 20;
+        const maxAge = 80;
+        const minBirthYear = today.getFullYear() - maxAge;
+        const maxBirthYear = today.getFullYear() - minAge;
+        const year = Math.floor(Math.random() * (maxBirthYear - minBirthYear + 1)) + minBirthYear;
+        const month = Math.floor(Math.random() * 12); // 0-11
+        // Untuk menghindari tanggal invalid (misal 31 Feb), ambil tanggal max 28
+        const day = Math.floor(Math.random() * 28) + 1;
+        const birthDate = new Date(year, month, day);
+        return birthDate.toISOString().split('T')[0]; // format YYYY-MM-DD
+    }
+    const birth_date = getRandomBirthDate();
+    try {
+        await db.insert(users).values({
+            full_name,
+            email,
+            password_hash,
+            role,
+            rank_id: rank[0].id,
+            unit_id: unit[0].id,
+            is_active: true,
+            birth_date
+        });
+        revalidatePath('/admin/accounts');
+        return { success: true, message: `User dummy ${role} berhasil ditambahkan. Email: ${email}` };
+    } catch (error) {
+        return { success: false, message: 'Gagal menambah user dummy.' };
     }
 } 

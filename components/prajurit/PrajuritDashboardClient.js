@@ -326,17 +326,18 @@ export default function PrajuritDashboardClient({
 
                     <TabsContent value="monitoring" className="space-y-6">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            {/* Left Column - Controls and Stats */}
-                            <div className="lg:col-span-1 space-y-6">
-                                {/* Device Control */}
+                            {/* Kolom kiri: Kontrol Device & Statistik */}
+                            <div className="lg:col-span-1 space-y-4">
+                                {/* Card Kontrol Device (horizontal kecil) */}
                                 <Card>
-                                    <CardHeader>
+                                    <CardHeader className="pb-2">
                                         <CardTitle className="flex items-center justify-between">
                                             <span>Kontrol Device</span>
                                             <Button
                                                 onClick={() => setIsDeviceConnected(!isDeviceConnected)}
                                                 variant={isDeviceConnected ? "destructive" : "default"}
                                                 className="flex items-center gap-2"
+                                                size="sm"
                                             >
                                                 {isDeviceConnected ? (
                                                     <>
@@ -352,78 +353,42 @@ export default function PrajuritDashboardClient({
                                             </Button>
                                         </CardTitle>
                                     </CardHeader>
-                                    <CardContent>
-                                        {/* Status Koneksi */}
-                                        <div className="mb-4">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="font-semibold">Status Device:</span>
-                                                {isDeviceConnected ? (
-                                                    <Badge variant="default" className="bg-green-500 flex items-center gap-1">
-                                                        <Wifi className="h-3 w-3" />
-                                                        Terhubung
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge variant="secondary" className="flex items-center gap-1">
-                                                        <WifiOff className="h-3 w-3" />
-                                                        Tidak Terhubung
-                                                    </Badge>
-                                                )}
+                                    <CardContent className="py-2 px-4">
+                                        {/* Informasi monitoring horizontal kecil */}
+                                        <div className="flex flex-row items-center justify-between gap-2 text-xs">
+                                            <div className="flex flex-col items-center px-2">
+                                                <Heart className="h-4 w-4 text-red-500 mb-1" />
+                                                <span className="font-semibold">{monitoringStats.heartRate || '-'}</span>
+                                                <span className="text-[10px] text-gray-500">BPM</span>
+                                            </div>
+                                            <div className="flex flex-col items-center px-2">
+                                                <Activity className="h-4 w-4 text-blue-500 mb-1" />
+                                                <span className="font-semibold">{monitoringStats.speed ? monitoringStats.speed.toFixed(1) : '-'}</span>
+                                                <span className="text-[10px] text-gray-500">km/jam</span>
+                                            </div>
+                                            <div className="flex flex-col items-center px-2">
+                                                <MapPin className="h-4 w-4 text-purple-500 mb-1" />
+                                                <span className="font-mono">{monitoringStats.lat ? monitoringStats.lat.toFixed(3) : '-'}</span>
+                                                <span className="font-mono">{monitoringStats.lng ? monitoringStats.lng.toFixed(3) : '-'}</span>
+                                            </div>
+                                            <div className="flex flex-col items-center px-2">
+                                                <span className="text-[10px] text-gray-500 mb-1">Status</span>
+                                                {getStatusBadge(monitoringStats.status)}
                                             </div>
                                         </div>
-
-                                        {/* Statistik Real-time */}
-                                        {isDeviceConnected && (
-                                            <div className="space-y-3">
-                                                <Card>
-                                                    <CardContent className="p-3 text-center">
-                                                        <Heart className="h-6 w-6 text-red-500 mx-auto mb-1" />
-                                                        <p className="text-xs text-gray-600">Detak Jantung</p>
-                                                        <p className="text-lg font-semibold text-red-600">{monitoringStats.heartRate || '-'} BPM</p>
-                                                    </CardContent>
-                                                </Card>
-                                                <Card>
-                                                    <CardContent className="p-3 text-center">
-                                                        <Activity className="h-6 w-6 text-blue-500 mx-auto mb-1" />
-                                                        <p className="text-xs text-gray-600">Kecepatan</p>
-                                                        <p className="text-lg font-semibold text-blue-600">{monitoringStats.speed ? monitoringStats.speed.toFixed(1) : '-'} km/jam</p>
-                                                    </CardContent>
-                                                </Card>
-                                                <Card>
-                                                    <CardContent className="p-3 text-center">
-                                                        <MapPin className="h-6 w-6 text-purple-500 mx-auto mb-1" />
-                                                        <p className="text-xs text-gray-600">Koordinat</p>
-                                                        <p className="text-xs font-mono">{monitoringStats.lat ? monitoringStats.lat.toFixed(5) : '-'}</p>
-                                                        <p className="text-xs font-mono">{monitoringStats.lng ? monitoringStats.lng.toFixed(5) : '-'}</p>
-                                                    </CardContent>
-                                                </Card>
-                                                <Card>
-                                                    <CardContent className="p-3 text-center">
-                                                        <span className="text-xs text-gray-600">Status Kondisi</span>
-                                                        <div className="mt-1">
-                                                            {isDeviceConnected ? (
-                                                                getStatusBadge(monitoringStats.status)
-                                                            ) : (
-                                                                <Badge variant="secondary">Tidak ada data</Badge>
-                                                            )}
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            </div>
-                                        )}
                                     </CardContent>
                                 </Card>
-
-                                {/* Chart Detak Jantung */}
+                                {/* Card Detak Jantung */}
                                 <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-sm">Grafik Detak Jantung</CardTitle>
+                                    <CardHeader className="py-2 px-4">
+                                        <CardTitle className="text-xs">Grafik Detak Jantung</CardTitle>
                                     </CardHeader>
-                                    <CardContent>
+                                    <CardContent className="py-2 px-2">
                                         {isDeviceConnected && heartRateData.length > 0 ? (
                                             <ChartContainer config={{}}>
-                                                <LineChart data={heartRateData} width={300} height={200}>
-                                                    <XAxis dataKey="time" />
-                                                    <YAxis yAxisId="left" />
+                                                <LineChart data={heartRateData} width={220} height={90}>
+                                                    <XAxis dataKey="time" hide />
+                                                    <YAxis yAxisId="left" width={24} />
                                                     <Tooltip />
                                                     <Line
                                                         yAxisId="left"
@@ -432,12 +397,12 @@ export default function PrajuritDashboardClient({
                                                         stroke="#ef4444"
                                                         name="Detak Jantung"
                                                         strokeWidth={2}
-                                                        dot={{ fill: '#ef4444', strokeWidth: 2, r: 3 }}
+                                                        dot={false}
                                                     />
                                                 </LineChart>
                                             </ChartContainer>
                                         ) : (
-                                            <div className="h-32 bg-gray-100 rounded flex items-center justify-center">
+                                            <div className="h-16 bg-gray-100 rounded flex items-center justify-center">
                                                 <span className="text-gray-400 text-xs">
                                                     {isDeviceConnected ? 'Menunggu data...' : 'Device tidak terhubung'}
                                                 </span>
@@ -445,18 +410,17 @@ export default function PrajuritDashboardClient({
                                         )}
                                     </CardContent>
                                 </Card>
-
-                                {/* Chart Kecepatan */}
+                                {/* Card Kecepatan */}
                                 <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-sm">Grafik Kecepatan</CardTitle>
+                                    <CardHeader className="py-2 px-4">
+                                        <CardTitle className="text-xs">Grafik Kecepatan</CardTitle>
                                     </CardHeader>
-                                    <CardContent>
+                                    <CardContent className="py-2 px-2">
                                         {isDeviceConnected && speedData.length > 0 ? (
                                             <ChartContainer config={{}}>
-                                                <LineChart data={speedData} width={300} height={200}>
-                                                    <XAxis dataKey="time" />
-                                                    <YAxis yAxisId="left" />
+                                                <LineChart data={speedData} width={220} height={90}>
+                                                    <XAxis dataKey="time" hide />
+                                                    <YAxis yAxisId="left" width={24} />
                                                     <Tooltip />
                                                     <Line
                                                         yAxisId="left"
@@ -465,12 +429,12 @@ export default function PrajuritDashboardClient({
                                                         stroke="#3b82f6"
                                                         name="Kecepatan"
                                                         strokeWidth={2}
-                                                        dot={{ fill: '#3b82f6', strokeWidth: 2, r: 3 }}
+                                                        dot={false}
                                                     />
                                                 </LineChart>
                                             </ChartContainer>
                                         ) : (
-                                            <div className="h-32 bg-gray-100 rounded flex items-center justify-center">
+                                            <div className="h-16 bg-gray-100 rounded flex items-center justify-center">
                                                 <span className="text-gray-400 text-xs">
                                                     {isDeviceConnected ? 'Menunggu data...' : 'Device tidak terhubung'}
                                                 </span>
@@ -479,8 +443,7 @@ export default function PrajuritDashboardClient({
                                     </CardContent>
                                 </Card>
                             </div>
-
-                            {/* Right Column - Large Map */}
+                            {/* Kolom kanan: Peta besar */}
                             <div className="lg:col-span-2">
                                 <Card>
                                     <CardHeader>
