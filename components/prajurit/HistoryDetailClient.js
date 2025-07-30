@@ -8,6 +8,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/Shadcn/avatar"
 import { Button } from "@/components/Shadcn/button";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import MiniMapbox from "@/components/komandan/MiniMapbox";
+import { ChartContainer } from '@/components/Shadcn/chart';
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 const chartConfig = {
     heartRate: { label: "Detak Jantung (BPM)", color: "#ef4444" },
@@ -43,6 +47,33 @@ const PlaceholderMap = () => (
 
 export default function HistoryDetailClient({ historyData, error }) {
     const router = useRouter();
+
+    const [heartRateData, setHeartRateData] = useState([]);
+    const [speedData, setSpeedData] = useState([]);
+    const [pathData, setPathData] = useState([]);
+
+    useEffect(() => {
+        if (historyData && historyData.statistics && historyData.statistics.length > 0) {
+            const hrData = historyData.statistics.map(s => ({
+                time: new Date(s.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                heartRate: s.heart_rate
+            }));
+            const spdData = historyData.statistics.map(s => ({
+                time: new Date(s.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                speed: s.speed_kph ? parseFloat(s.speed_kph) : 0
+            }));
+            const pData = historyData.statistics
+                .filter(s => s.latitude !== null && s.longitude !== null)
+                .map(s => ({
+                    lat: parseFloat(s.latitude),
+                    lng: parseFloat(s.longitude)
+                }));
+
+            setHeartRateData(hrData);
+            setSpeedData(spdData);
+            setPathData(pData);
+        }
+    }, [historyData]);
 
     if (error) {
         return (
@@ -127,33 +158,87 @@ export default function HistoryDetailClient({ historyData, error }) {
                 </Card>
 
                 <div className="md:col-span-2 space-y-6">
-                    <PlaceholderChart title="Grafik Detak Jantung" />
-                    <PlaceholderChart title="Grafik Kecepatan" />
+                    <Card>
+                        <CardHeader className="py-2 px-4">
+                            <CardTitle className="text-xs">Grafik Detak Jantung</CardTitle>
+                        </CardHeader>
+                        <CardContent className="py-2 px-2">
+                            {heartRateData.length > 0 ? (
+                                <ChartContainer config={{}}>
+                                    <LineChart data={heartRateData} width={500} height={200}>
+                                        <XAxis dataKey="time" />
+                                        <YAxis yAxisId="left" width={24} />
+                                        <Tooltip />
+                                        <Line
+                                            yAxisId="left"
+                                            type="monotone"
+                                            dataKey="heartRate"
+                                            stroke="#ef4444"
+                                            name="Detak Jantung"
+                                            strokeWidth={2}
+                                            dot={false}
+                                        />
+                                    </LineChart>
+                                </ChartContainer>
+                            ) : (
+                                <div className="h-16 bg-gray-100 rounded flex items-center justify-center">
+                                    <span className="text-gray-400 text-xs">
+                                        Tidak ada data detak jantung.
+                                    </span>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="py-2 px-4">
+                            <CardTitle className="text-xs">Grafik Kecepatan</CardTitle>
+                        </CardHeader>
+                        <CardContent className="py-2 px-2">
+                            {speedData.length > 0 ? (
+                                <ChartContainer config={{}}>
+                                    <LineChart data={speedData} width={500} height={200}>
+                                        <XAxis dataKey="time" />
+                                        <YAxis yAxisId="left" width={24} />
+                                        <Tooltip />
+                                        <Line
+                                            yAxisId="left"
+                                            type="monotone"
+                                            dataKey="speed"
+                                            stroke="#3b82f6"
+                                            name="Kecepatan"
+                                            strokeWidth={2}
+                                            dot={false}
+                                        />
+                                    </LineChart>
+                                </ChartContainer>
+                            ) : (
+                                <div className="h-16 bg-gray-100 rounded flex items-center justify-center">
+                                    <span className="text-gray-400 text-xs">
+                                        Tidak ada data kecepatan.
+                                    </span>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Peta Aktivitas</CardTitle>
+                        <CardDescription>Jalur yang ditempuh selama sesi latihan.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {pathData.length > 0 ? (
+                            <MiniMapbox lat={pathData[pathData.length - 1].lat} lng={pathData[pathData.length - 1].lng} path={pathData} />
+                        ) : (
+                            <div className="w-full h-[600px] bg-gray-200 flex items-center justify-center rounded-lg">
+                                <span className="text-gray-500 text-lg">Tidak ada data lokasi untuk sesi ini.</span>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
-
-            <PlaceholderMap />
-
-            {/* Bagian untuk menampilkan data mentah untuk debugging */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Data Statistik Mentah</CardTitle>
-                    <CardDescription>
-                        Total {historyData.statistics?.length || 0} titik data.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="max-h-60 overflow-auto">
-                    <pre className="text-xs bg-gray-100 p-2 rounded">
-                        {(() => {
-                            try {
-                                return JSON.stringify(historyData.statistics || [], null, 2);
-                            } catch (error) {
-                                return 'Error serializing data: ' + error.message;
-                            }
-                        })()}
-                    </pre>
-                </CardContent>
-            </Card>
         </div>
     )
 }

@@ -23,12 +23,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 
 const formSchema = z.object({
     name: z.string().min(3, { message: "Nama sesi minimal 3 karakter." }),
-    description: z.string().min(10, { message: "Deskripsi minimal 10 karakter." }),
+    description: z.string().min(1, { message: "Deskripsi minimal 10 karakter." }),
     scheduled_at: z.string().nonempty({ message: "Tanggal dan waktu harus diisi." }),
     location_id: z.string().nonempty({ message: "Lokasi latihan harus dipilih." }),
-    commanders: z.array(z.number()).min(1, { message: "Pilih minimal satu komandan." }),
-    participants: z.array(z.number()).min(1, { message: "Pilih minimal satu prajurit." }),
-    medics: z.array(z.number()).min(1, { message: "Pilih minimal satu medis." }),
+    commanders: z.array(z.number()).min(0, { message: "Pilih minimal nol komandan." }),
+    participants: z.array(z.number()).min(0, { message: "Pilih minimal nol prajurit." }),
+    medics: z.array(z.number()).min(0, { message: "Pilih minimal nol medis." }),
 });
 
 
@@ -86,16 +86,16 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
             scheduled.setSeconds(0);
             const scheduledAt = scheduled.toISOString();
             form.setValue("scheduled_at", scheduledAt);
-            fetchAvailableUsers(scheduledAt);
+            fetchAvailableUsers(scheduledAt, initialData?.id); // Teruskan initialData.id di sini
         }
-    }, [date, time, form]);
+    }, [date, time, form, initialData?.id]); // Tambahkan initialData.id ke dependency array
 
-    const fetchAvailableUsers = async (scheduledAt) => {
+    const fetchAvailableUsers = async (scheduledAt, excludeSessionId = null) => {
         try {
             const [komandanData, prajuritData, medisData] = await Promise.all([
-                getAvailableUsersByRole("komandan", scheduledAt),
-                getAvailableUsersByRole("prajurit", scheduledAt),
-                getAvailableUsersByRole("medis", scheduledAt)
+                getAvailableUsersByRole("komandan", scheduledAt, excludeSessionId),
+                getAvailableUsersByRole("prajurit", scheduledAt, excludeSessionId),
+                getAvailableUsersByRole("medis", scheduledAt, excludeSessionId)
             ]);
             setAvailableKomandan(komandanData);
             setAvailablePrajurit(prajuritData);
@@ -133,9 +133,8 @@ export default function CreateSessionForm({ komandan, prajurit, medis, locations
             setSelectedLocation(null);
             setDate(null);
             setTime("");
-            if (!initialData || !initialData.id) {
-                router.push('/komandan');
-            }
+            // Pastikan selalu redirect ke /komandan setelah sukses, baik insert maupun update
+            router.push('/komandan');
         } else {
             if (res.message && res.message.includes('sudah memiliki sesi latihan')) {
                 toast.error(res.message + " Silakan pilih waktu yang berbeda atau hapus sesi yang konflik.");

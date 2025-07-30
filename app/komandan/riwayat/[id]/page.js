@@ -7,6 +7,7 @@ import MiniMapbox from "@/components/komandan/MiniMapbox";
 import { getSessionById, getSessionStats } from "@/actions/komandan/sessions_actions";
 import { ChartContainer } from "@/components/Shadcn/chart";
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/Shadcn/avatar'; // Import Avatar components
 
 // Fungsi utilitas untuk format data chart
 function formatChartData(userStats) {
@@ -82,8 +83,18 @@ export default function RiwayatDetailPage() {
                             const prajurit = session.participants?.find(p => String(p.id) === String(userId));
                             return (
                                 <div key={userId} className="mb-8">
-                                    <h3 className="font-semibold mb-2">
-                                        {prajurit ? prajurit.name : `Prajurit #${userId}`}
+                                    <h3 className="font-semibold mb-2 flex items-center gap-2">
+                                        {prajurit ? (
+                                            <>
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage src={prajurit.avatar} />
+                                                    <AvatarFallback>{prajurit.full_name?.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                                {prajurit.full_name}
+                                            </>
+                                        ) : (
+                                            `Prajurit #${userId}`
+                                        )}
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {/* Chart Visualisasi */}

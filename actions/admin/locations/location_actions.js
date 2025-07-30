@@ -2,6 +2,7 @@
 import { db } from "@/lib/db";
 import { training_locations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { revalidatePath } from 'next/cache';
 
 export async function getAllLocations() {
     return await db.select().from(training_locations);
@@ -15,6 +16,7 @@ export async function createLocation(data) {
         latitude: parseFloat(data.latitude),
         longitude: parseFloat(data.longitude),
     });
+    revalidatePath('/admin/location');
 }
 
 export async function updateLocation(id, data) {
@@ -26,13 +28,16 @@ export async function updateLocation(id, data) {
             latitude: parseFloat(data.latitude),
             longitude: parseFloat(data.longitude),
         })
-        .where(eq(training_locations.id, id));
+        .where(eq(training_locations.id, Number(id)));
+    revalidatePath('/admin/location');
 }
 
 export async function deleteLocation(id) {
-    await db.delete(training_locations).where(eq(training_locations.id, id));
+    await db.delete(training_locations).where(eq(training_locations.id, Number(id)));
+    revalidatePath('/admin/location');
 }
+
 export async function getLocationById(id) {
-    const result = await db.select().from(training_locations).where(eq(training_locations.id, id));
+    const result = await db.select().from(training_locations).where(eq(training_locations.id, Number(id)));
     return result[0] || null;
 }

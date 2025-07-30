@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/Shadcn/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/Shadcn/card';
@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { loginAction } from '@/actions/auth/auth';
 import { createDefaultAdmin } from '@/actions/auth/create_admin_action';
+import { getSession } from '@/actions/auth/auth'; // Asumsi ada fungsi getSession
 
 export default function LoginPage() {
     const router = useRouter();
@@ -19,29 +20,32 @@ export default function LoginPage() {
     const [isLoading, startTransition] = useTransition();
     const [adminLoading, setAdminLoading] = useState(false);
 
+    useEffect(() => {
+        // Cek sesi di client side untuk menghindari error cookies()
+        async function checkSession() {
+            const session = await getSession();
+            if (session) {
+                // Arahkan ke dashboard sesuai role jika sudah login
+                switch (session.role) {
+                    case 'admin': router.push('/admin'); break;
+                    case 'komandan': router.push('/komandan'); break;
+                    case 'medis': router.push('/medis'); break;
+                    case 'prajurit': router.push('/prajurit'); break;
+                    default: break;
+                }
+            }
+        }
+        checkSession();
+    }, [router]);
+
     const handleLogin = (e) => {
         e.preventDefault();
         startTransition(async () => {
             const result = await loginAction({ email, password });
             if (result.success) {
                 toast.success(`Login berhasil! Selamat datang, ${result.user.full_name}.`);
-                // Redirect sesuai role
-                switch (result.user.role) {
-                    case 'komandan':
-                        router.push('/komandan');
-                        break;
-                    case 'prajurit':
-                        router.push('/prajurit');
-                        break;
-                    case 'medis':
-                        router.push('/medis');
-                        break;
-                    case 'admin':
-                        router.push('/admin');
-                        break;
-                    default:
-                        router.push('/');
-                }
+                // Redirect akan ditangani oleh middleware atau useEffect
+                window.location.reload(); // Reload untuk memicu middleware
             } else {
                 toast.error(result.message || 'Login gagal.');
             }

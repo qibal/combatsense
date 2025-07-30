@@ -12,43 +12,95 @@ export async function getTrainingHistory() {
             id: training_sessions.id,
             sessionName: training_sessions.name,
             date: training_sessions.scheduled_at,
-            duration: sql`'2 jam'`, // Temporary - nanti bisa dihitung dari data
-            // Statistik dummy untuk saat ini, karena perlu agregasi kompleks
-            avgHeartRate: sql`100`,
-            totalDistance: sql`5.2`,
-            performance: sql`'baik'`
+            // Ambil semua statistik untuk sesi ini
+            stats: sql`(SELECT json_agg(json_build_object(
+                'timestamp', lms.timestamp,
+                'heart_rate', lms.heart_rate,
+                'speed_kph', lms.speed_kph,
+                'latitude', lms.latitude,
+                'longitude', lms.longitude
+            ) ORDER BY lms.timestamp) FROM ${live_monitoring_stats} lms WHERE lms.session_id = ${training_sessions.id})`,
         })
             .from(session_participants)
             .leftJoin(training_sessions, eq(session_participants.session_id, training_sessions.id))
             .where(and(
                 eq(session_participants.user_id, LOGGED_IN_USER_ID),
-                eq(training_sessions.status, 'selesai') // Hanya ambil sesi yang sudah selesai
+                eq(training_sessions.status, 'selesai')
             ));
 
-        // Pastikan data aman untuk serialisasi
-        const safeHistory = history.map(item => ({
-            id: item.id,
-            sessionName: item.sessionName,
-            date: item.date ? new Date(item.date).toISOString() : null,
-            duration: item.duration,
-            myStats: {
-                avgHeartRate: item.avgHeartRate || 0,
-                totalDistance: item.totalDistance || 0,
-                performance: item.performance || 'baik'
-            }
-        }));
+        const processedHistory = history.map(item => {
+            let duration = 'N/A';
+            let avgHeartRate = 'N/A';
+            let totalDistance = 'N/A';
+            let performance = 'baik'; // Default value
 
-        // Validasi serialisasi untuk memastikan data aman
-        try {
-            JSON.stringify(safeHistory);
-            return { success: true, data: safeHistory };
-        } catch (serializeError) {
-            console.error("Error serializing training history:", serializeError);
+            if (item.stats && item.stats.length > 0) {
+                const sortedStats = item.stats.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                const firstTimestamp = new Date(sortedStats[0].timestamp);
+                const lastTimestamp = new Date(sortedStats[sortedStats.length - 1].timestamp);
+                const diffMs = lastTimestamp.getTime() - firstTimestamp.getTime();
+
+                // Calculate duration in minutes or hours
+                const minutes = Math.floor(diffMs / (1000 * 60));
+                const hours = Math.floor(minutes / 60);
+                if (hours > 0) {
+                    duration = `${hours} jam ${minutes % 60} menit`;
+                } else {
+                    duration = `${minutes} menit`;
+                }
+
+                // Calculate average heart rate
+                const totalHeartRate = sortedStats.reduce((sum, s) => sum + Number(s.heart_rate), 0);
+                avgHeartRate = (totalHeartRate / sortedStats.length).toFixed(0);
+
+                // Calculate total distance (simple approximation)
+                let distKm = 0;
+                for (let i = 1; i < sortedStats.length; i++) {
+                    const p1 = sortedStats[i - 1];
+                    const p2 = sortedStats[i];
+                    if (p1.latitude && p1.longitude && p2.latitude && p2.longitude) {
+                        // Haversine formula approximation for small distances
+                        const R = 6371e3; // metres
+                        const φ1 = Number(p1.latitude) * Math.PI / 180; // φ, λ in radians
+                        const φ2 = Number(p2.latitude) * Math.PI / 180;
+                        const Δφ = (Number(p2.latitude) - Number(p1.latitude)) * Math.PI / 180;
+                        const Δλ = (Number(p2.longitude) - Number(p1.longitude)) * Math.PI / 180;
+
+                        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                            Math.cos(φ1) * Math.cos(φ2) *
+                            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+                        distKm += (R * c) / 1000; // in kilometres
+                    }
+                }
+                totalDistance = distKm.toFixed(2);
+
+                // Simple performance logic (bisa dikembangkan)
+                if (Number(avgHeartRate) > 110 && Number(totalDistance) > 3) {
+                    performance = 'sangat baik';
+                } else if (Number(avgHeartRate) > 90 && Number(totalDistance) > 1) {
+                    performance = 'baik';
+                } else {
+                    performance = 'cukup';
+                }
+            }
+
             return {
-                success: false,
-                message: "Terjadi kesalahan saat memproses data histori latihan."
+                id: item.id,
+                sessionName: item.sessionName,
+                date: item.date ? new Date(item.date).toISOString() : null,
+                duration: duration,
+                myStats: {
+                    avgHeartRate: avgHeartRate,
+                    totalDistance: totalDistance,
+                    performance: performance,
+                },
             };
-        }
+        });
+
+        console.log("getTrainingHistory processedHistory:", processedHistory); // Tambahkan log ini
+        return { success: true, data: processedHistory };
 
     } catch (error) {
         console.error("Error fetching training history:", error);

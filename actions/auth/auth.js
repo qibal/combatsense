@@ -63,3 +63,22 @@ export async function loginAction({ email, password }) {
 
   return { success: true, user: userWithoutPassword };
 }
+
+/**
+ * Server action untuk mendapatkan sesi pengguna dari cookie.
+ * Ini aman untuk dipanggil dari komponen klien.
+ */
+export async function getSession() {
+  const session = cookies().get('session')?.value;
+  if (!session) return null;
+
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+    const { payload } = await jose.jwtVerify(session, secret);
+    return payload;
+  } catch (error) {
+    // Jika token tidak valid, hapus cookie
+    cookies().set('session', '', { maxAge: 0 });
+    return null;
+  }
+}

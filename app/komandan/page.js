@@ -33,7 +33,8 @@ import {
   FileText,
   Users,
   Calendar,
-  LogOut
+  LogOut,
+  Trash2
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -44,6 +45,8 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
+  DialogClose,
+  DialogTrigger
 } from "@/components/Shadcn/dialog";
 import { ScrollArea } from "@/components/Shadcn/scroll-area";
 import { Separator } from "@/components/Shadcn/separator";
@@ -54,22 +57,25 @@ import {
   getSessionById,
   getAvailableUsersByRole,
   getAllLocations,
-  setSessionFinished
+  setSessionFinished,
+  deleteSession
 } from "@/actions/komandan/sessions_actions";
 import CreateSessionForm from "@/components/komandan/CreateSessionForm";
+import { Alert, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/Shadcn/alert-dialog';
+import { toast } from "sonner";
+
 export default function KomandanDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sesiId = Number(searchParams.get('id'));
+
+  // State declarations
   const [komandan, setKomandan] = useState([]);
   const [prajurit, setPrajurit] = useState([]);
   const [medis, setMedis] = useState([]);
   const [locations, setLocations] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [monitoringData, setMonitoringData] = useState({});
-  const [showStartConfirm, setShowStartConfirm] = useState(false);
-  const [showStopConfirm, setShowStopConfirm] = useState(false);
-  const [sessionToModify, setSessionToModify] = useState(null);
   const [selectedPrajurit, setSelectedPrajurit] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -81,333 +87,14 @@ export default function KomandanDashboard() {
   const [monitoringStats, setMonitoringStats] = useState({});
   const [isRecording, setIsRecording] = useState(false);
   const [lastPositions, setLastPositions] = useState({});
-  // Simulasi statistik monitoring (langsung jalan saat status "berlangsung")
-  useEffect(() => {
-    let interval;
-    if (activeSession && activeSession.status === "berlangsung") {
-      interval = setInterval(() => {
-        setMonitoringStats(prevStats => {
-          const newStats = {};
-          setLastPositions(lastPrev => {
-            const updatedPositions = { ...lastPrev };
-            (activeSession.participants || []).forEach(p => {
-              // Ambil posisi terakhir, default di tengah Monas
-              let prevLat = lastPrev[p.id]?.lat ?? -6.1754;
-              let prevLng = lastPrev[p.id]?.lng ?? 106.8272;
-
-              // Simulasi kecepatan lari (2-5 m/s)
-              const speed = 7 + Math.random() * 11; // 7-18 km/jam
-              const speedMs = speed / 3.6; // konversi ke m/s
-
-              // 1 derajat latitude ~ 111.32 km, longitude tergantung latitude
-              const meterToDegLat = 1 / 111320;
-              const meterToDegLng = 1 / (111320 * Math.cos(prevLat * Math.PI / 180));
-
-              // Langkah per detik
-              const step = speedMs; // meter per detik
-              const angle = Math.random() * 2 * Math.PI;
-              let lat = prevLat + Math.sin(angle) * step * meterToDegLat;
-              let lng = prevLng + Math.cos(angle) * step * meterToDegLng;
-
-              // Jika terlalu jauh dari Monas (>200m), arahkan balik ke tengah
-              const dist = Math.sqrt(Math.pow((lat + 6.1754) * 111320, 2) + Math.pow((lng - 106.8272) * 111320, 2));
-              if (dist > 200) {
-                lat = -6.1754 + (Math.random() - 0.5) * 0.001;
-                lng = 106.8272 + (Math.random() - 0.5) * 0.001;
-              }
-
-              updatedPositions[p.id] = { lat, lng };
-
-              // Simulasi statistik lain
-              const heartRate = 90 + Math.round(Math.random() * 30);
-              let status = "sehat";
-              if (heartRate > 110) status = "lelah";
-              if (heartRate > 120) status = "bahaya";
-              newStats[p.id] = { heartRate, speed, lat, lng, status };
-            });
-            return updatedPositions;
-          });
-          return newStats;
-        });
-      }, 1000);
-    } else {
-      setMonitoringStats({});
-      setLastPositions({});
-    }
-    return () => clearInterval(interval);
-  }, [activeSession]);
-
-  useEffect(() => {
-    let interval;
-    if (
-      isRecording &&
-      activeSession &&
-      activeSession.status === "berlangsung" &&
-      activeSession.participants &&
-      activeSession.participants.length > 0
-    ) {
-      interval = setInterval(() => {
-        // Generate data statistik baru (detak jantung, speed, status, lat, lng)
-        const newStats = {};
-        const updatedPositions = {};
-
-        (activeSession.participants || []).forEach(p => {
-          // Simulasi posisi (atau ambil dari device jika ada)
-          let lat = -6.1754 + (Math.random() - 0.5) * 0.001;
-          let lng = 106.8272 + (Math.random() - 0.5) * 0.001;
-
-          // Simulasi statistik lain
-          const heartRate = 90 + Math.round(Math.random() * 30);
-          let status = "sehat";
-          if (heartRate > 110) status = "lelah";
-          if (heartRate > 120) status = "bahaya";
-          const speed = 7 + Math.random() * 11; // 7-18 km/jam
-
-          newStats[p.id] = { heartRate, speed, lat, lng, status };
-          updatedPositions[p.id] = { lat, lng };
-        });
-
-        setMonitoringStats(newStats);
-        setLastPositions(updatedPositions);
-
-        // Simpan ke localStorage
-        const prev = JSON.parse(localStorage.getItem('sessionStats') || '[]');
-        prev.push({
-          timestamp: new Date().toISOString(),
-          stats: { ...newStats }
-        });
-        localStorage.setItem('sessionStats', JSON.stringify(prev));
-        // Debug
-        console.log("sessionStats:", localStorage.getItem('sessionStats'));
-      }, 1000);
-    } else {
-      setMonitoringStats({});
-      setLastPositions({});
-    }
-    return () => clearInterval(interval);
-  }, [isRecording, activeSession]);
-  // console.log("Kirim ke API:", {
-  //   sessionId: activeSession.id,
-  //   timestamp: new Date().toISOString(),
-  //   stats: monitoringStats
-  // });
-  useEffect(() => {
-    async function fetchSessions() {
-      const data = await getAllSessions();
-      setAllSessions(data);
-    }
-    fetchSessions();
-  }, []);
-
-  useEffect(() => {
-    async function fetchData() {
-      setInitialData(await getSessionById(sesiId));
-    }
-    fetchData();
-  }, [sesiId]);
-
-  // Data prajurit dari database
-
-  useEffect(() => {
-    async function fetchPrajurit() {
-      const data = await getAllPrajurit();
-      setPrajurit(data);
-    }
-    fetchPrajurit();
-  }, []);
-
-  useEffect(() => {
-    async function fetchUnitsAndRanks() {
-      const units = await getAllUnits();
-      const ranks = await getAllRanks();
-      setUnitOptions(["semua", ...units.map(u => u.name)]);
-      setRankOptions(["semua", ...ranks.map(r => r.name)]);
-    }
-    fetchUnitsAndRanks();
-  }, []);
-
-  // Handler untuk klik baris prajurit
-  const handleShowPrajuritDetail = async (p) => {
-    setLoadingDetail(true);
-    setShowDetailModal(true);
-    // Fetch detail dari server
-    const detail = await getPrajuritDetail(p.id);
-    setSelectedPrajurit(detail);
-    setLoadingDetail(false);
-  };
   const [searchTerm, setSearchTerm] = useState("");
   const [unitFilter, setUnitFilter] = useState("semua");
   const [rankFilter, setRankFilter] = useState("semua");
   const [unitOptions, setUnitOptions] = useState(["semua"]);
   const [rankOptions, setRankOptions] = useState(["semua"]);
+  const [tabValue, setTabValue] = useState("sesi-aktif"); // default tab
 
-  // Filter prajurit berdasarkan search, unit, dan rank
-  const filteredPrajurit = prajurit.filter(p => {
-    const matchSearch = p.full_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchUnit = unitFilter === "semua" || p.unit_name === unitFilter;
-    const matchRank = rankFilter === "semua" || p.rank_name === rankFilter;
-    return matchSearch && matchUnit && matchRank;
-  });
-  const confirmStartSession = (session) => {
-    setSessionToModify(session);
-    setShowStartConfirm(true);
-  };
-
-  const confirmStopSession = (session) => {
-    setSessionToModify(session);
-    setShowStopConfirm(true);
-  };
-  const handleStartSession = (sessionId) => {
-    setAllSessions(prev =>
-      prev.map(s =>
-        s.id === sessionId
-          ? { ...s, isStarted: true, status: 'berlangsung' }
-          : s
-      )
-    );
-    setActiveSessionId(sessionId);
-    setIsStarted(true);
-  }
-  const startSession = () => {
-    if (!sessionToModify) return;
-    setAllSessions(prev =>
-      prev.map(s =>
-        s.id === sessionToModify.id
-          ? { ...s, isStarted: true, status: 'berlangsung' }
-          : s
-      )
-    );
-    setShowStartConfirm(false);
-    setSessionToModify(null);
-  };
-
-  const endSession = () => {
-    if (!sessionToModify) return;
-    setAllSessions(prev =>
-      prev.map(s =>
-        s.id === sessionToModify.id
-          ? { ...s, isStarted: false, status: 'selesai' }
-          : s
-      )
-    );
-    setActiveSessionId(null);
-    setShowStopConfirm(false);
-    setSessionToModify(null);
-  };
-  useEffect(() => {
-    async function fetchUsersAndLocations() {
-      setKomandan(await getAvailableUsersByRole("komandan"));
-      setPrajurit(await getAvailableUsersByRole("prajurit"));
-      setMedis(await getAvailableUsersByRole("medis"));
-      setLocations(await getAllLocations());
-    }
-    fetchUsersAndLocations();
-  }, []);
-
-
-
-
-  // 1. Simpan statistik ke localStorage setiap detik
-  // useEffect(() => {
-  //   let interval;
-  //   if (isRecording && activeSession) {
-  //     interval = setInterval(() => {
-  //       // Data dummy untuk testKey
-  //       const testData = {
-  //         timestamp: new Date().toISOString(),
-  //         random: Math.random(),
-  //         note: "ini testKey dari interval"
-  //       };
-  //       localStorage.setItem('testKey', JSON.stringify(testData));
-  //       console.log("testKey (JSON):", localStorage.getItem('testKey'));
-
-  //       // Coba juga sessionStats dengan data dummy
-  //       const prev = JSON.parse(localStorage.getItem('sessionStats') || '[]');
-  //       prev.push(testData);
-  //       localStorage.setItem('sessionStats', JSON.stringify(prev));
-  //       console.log("sessionStats:", localStorage.getItem('sessionStats'));
-  //     }, 1000);
-  //   }
-  //   return () => clearInterval(interval);
-  // }, [isRecording, activeSession]);
-  useEffect(() => {
-    let interval;
-    if (isRecording && activeSession && activeSession.participants && activeSession.participants.length > 0) {
-      interval = setInterval(() => {
-        // Generate data monitoringStats baru
-        const newStats = {};
-        activeSession.participants.forEach(p => {
-          newStats[p.id] = {
-            heartRate: Math.floor(Math.random() * 40) + 80,
-            speed: Math.random() * 10 + 5,
-            lat: -6.17 + Math.random() * 0.001,
-            lng: 106.82 + Math.random() * 0.001
-          };
-        });
-        setMonitoringStats(newStats); // tetap update state jika ingin pakai di UI
-
-        // Simpan langsung ke localStorage
-        const prev = JSON.parse(localStorage.getItem('sessionStats') || '[]');
-        prev.push({
-          timestamp: new Date().toISOString(),
-          stats: { ...newStats }
-        });
-        localStorage.setItem('sessionStats', JSON.stringify(prev));
-        // Debug
-        console.log("sessionStats:", localStorage.getItem('sessionStats'));
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording, activeSession]);
-  // 2. Handler mulai dan selesai sesi
-  const handleStartRecording = () => {
-    localStorage.setItem('sessionStats', JSON.stringify([])); // Reset data lama
-    setIsRecording(true);
-  };
-
-  const handleStopRecording = async () => {
-    setIsRecording(false);
-    const allStats = JSON.parse(localStorage.getItem('sessionStats') || '[]');
-    for (const stat of allStats) {
-      await fetch('/api/komandan/statistik', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: activeSession.id,
-          timestamp: stat.timestamp,
-          stats: stat.stats,
-        }),
-      });
-    }
-    localStorage.removeItem('sessionStats');
-    await setSessionFinished(activeSession.id);
-    setAllSessions(await getAllSessions());
-    setTabValue("riwayat");
-    setActiveSessionId(null);
-  };
-
-
-
-
-
-
-
-
-
-
-
-  const handleSetActiveSession = async (session) => {
-    const res = await setSessionActive(session.id);
-    if (res.success) {
-      setActiveSessionId(session.id);
-      setTabValue("sesi-aktif");
-      setAllSessions(await getAllSessions()); // refresh data
-    } else {
-      // tampilkan error jika perlu
-    }
-  };
-
-
+  // Helper functions (independent of state/handlers)
   const getStatusBadge = (status) => {
     switch (status) {
       case 'sehat': return <Badge variant="default" className="bg-green-500">Sehat</Badge>;
@@ -419,28 +106,213 @@ export default function KomandanDashboard() {
 
   const getProgressValue = (value, max) => Math.min(Math.round((value / max) * 100), 100);
 
-  const showPrajuritDetail = (prajuritId) => {
-    const detail = prajuritDetails[prajuritId];
-    setSelectedPrajurit(detail);
-    setShowDetailModal(true);
+  // Handler functions
+  const handleSetActiveSession = async (session) => {
+    const res = await setSessionActive(session.id);
+    if (res.success) {
+      setActiveSessionId(session.id);
+      setTabValue("sesi-aktif");
+      setAllSessions(await getAllSessions()); // refresh data
+      console.log("handleSetActiveSession: Session set to active. activeSessionId:", session.id);
+    } else {
+      toast.error("Gagal mengaktifkan sesi: " + res.message);
+    }
   };
-  const [tabValue, setTabValue] = useState("sesi-aktif"); // default tab
+
+  const handleStopRecording = async (sessionToStop) => {
+    if (!sessionToStop || !sessionToStop.id) {
+      toast.error("Sesi tidak valid. Tidak dapat menghentikan sesi.");
+      console.error("Attempted to stop session with invalid session object:", sessionToStop);
+      return;
+    }
+    const sessionId = sessionToStop.id;
+    setIsRecording(false);
+    const allStats = JSON.parse(localStorage.getItem('sessionStats') || '[]');
+    for (const stat of allStats) {
+      await fetch('/api/komandan/statistik', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: sessionId,
+          timestamp: stat.timestamp,
+          stats: stat.stats,
+        }),
+      });
+    }
+    localStorage.removeItem('sessionStats');
+    await setSessionFinished(sessionId);
+    setAllSessions(await getAllSessions());
+    setTabValue("riwayat");
+    setActiveSessionId(null);
+  };
+
+  const handleStartRecording = () => {
+    if (!activeSession) {
+      toast.error("Tidak ada sesi aktif untuk memulai perekaman.");
+      return;
+    }
+    localStorage.setItem('sessionStats', JSON.stringify([])); // Reset data lama
+    setIsRecording(true);
+    toast.success("Perekaman sesi dimulai.");
+    console.log("handleStartRecording: Recording started.");
+  };
+
+  const handleShowPrajuritDetail = async (p) => {
+    setLoadingDetail(true);
+    setShowDetailModal(true);
+    const detail = await getPrajuritDetail(p.id);
+    setSelectedPrajurit(detail);
+    setLoadingDetail(false);
+  };
 
   const handleKelolaLatihan = () => {
     router.push('/komandan/kelola_latihan');
   };
 
-  // Handler untuk logout
   const handleLogout = async () => {
     try {
       await logoutAction();
       router.push('/');
     } catch (error) {
       console.error('Error during logout:', error);
-      // Tetap redirect meski ada error
       router.push('/');
     }
   };
+
+  // Effects
+  useEffect(() => {
+    async function fetchSessions() {
+      const data = await getAllSessions();
+      setAllSessions(data);
+      console.log("useEffect: All sessions fetched:", data);
+    }
+    fetchSessions();
+  }, []);
+
+  useEffect(() => {
+    async function fetchData() {
+      const data = await getSessionById(sesiId);
+      setInitialData(data);
+      console.log("useEffect: Initial session data fetched for sesiId:", sesiId, data);
+    }
+    fetchData();
+  }, [sesiId]);
+
+  useEffect(() => {
+    async function fetchUsersAndLocations() {
+      setKomandan(await getAvailableUsersByRole("komandan"));
+      setPrajurit(await getAvailableUsersByRole("prajurit"));
+      setMedis(await getAvailableUsersByRole("medis"));
+      setLocations(await getAllLocations());
+      console.log("useEffect: Users and locations fetched.");
+    }
+    fetchUsersAndLocations();
+  }, []);
+
+  useEffect(() => {
+    let intervalId;
+
+    console.log("Monitoring useEffect triggered. activeSession:", activeSession, "participants length:", activeSession?.participants?.length);
+    if (activeSession && activeSession?.participants?.length > 0) {
+      setMonitoringStats(() => { // Use functional update for fresh state
+        const initialStats = {};
+        const initialPositions = {};
+        activeSession.participants.forEach(p => {
+          const lat = -6.1754 + (Math.random() - 0.5) * 0.001;
+          const lng = 106.8272 + (Math.random() - 0.5) * 0.001;
+          const heartRate = 90 + Math.round(Math.random() * 30);
+          const speed = 7 + Math.random() * 11;
+          let status = "sehat";
+          if (heartRate > 110) status = "lelah";
+          if (heartRate > 120) status = "bahaya";
+
+          initialStats[p.id] = { heartRate, speed, lat, lng, status };
+          initialPositions[p.id] = { lat, lng };
+        });
+        setLastPositions(initialPositions);
+        console.log("Monitoring useEffect: Initial monitoringStats set:", initialStats);
+        return initialStats;
+      });
+
+      intervalId = setInterval(() => {
+        setMonitoringStats(currentStats => {
+          const updatedStats = {};
+          setLastPositions(lastPrev => {
+            const updatedPositions = { ...lastPrev };
+            activeSession.participants.forEach(p => {
+              let prevLat = lastPrev[p.id]?.lat ?? -6.1754;
+              let prevLng = lastPrev[p.id]?.lng ?? 106.8272;
+
+              const speed = 7 + Math.random() * 11; // 7-18 km/jam
+              const speedMs = speed / 3.6; // konversi ke m/s
+
+              const meterToDegLat = 1 / 111320;
+              const meterToDegLng = 1 / (111320 * Math.cos(prevLat * Math.PI / 180));
+
+              const step = speedMs; // meter per detik
+              const angle = Math.random() * 2 * Math.PI;
+              let lat = prevLat + Math.sin(angle) * step * meterToDegLat;
+              let lng = prevLng + Math.cos(angle) * step * meterToDegLng;
+
+              const dist = Math.sqrt(Math.pow((lat + 6.1754) * 111320, 2) + Math.pow((lng - 106.8272) * 111320, 2));
+              if (dist > 200) {
+                lat = -6.1754 + (Math.random() - 0.5) * 0.001;
+                lng = 106.8272 + (Math.random() - 0.5) * 0.001;
+              }
+
+              updatedPositions[p.id] = { lat, lng };
+
+              const heartRate = 90 + Math.round(Math.random() * 30);
+              let status = "sehat";
+              if (heartRate > 110) status = "lelah";
+              if (heartRate > 120) status = "bahaya";
+              updatedStats[p.id] = { heartRate, speed, lat, lng, status };
+            });
+            return updatedPositions;
+          });
+          return updatedStats;
+        });
+      }, 1000);
+    } else {
+      console.log("Monitoring useEffect: No active session or no participants. Clearing stats.");
+      setMonitoringStats({});
+      setLastPositions({});
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        console.log("Monitoring useEffect: Cleared interval.");
+      }
+    };
+  }, [activeSession]);
+
+  useEffect(() => {
+    console.log("Saving to localStorage useEffect triggered. isRecording:", isRecording, "activeSession status:", activeSession?.status, "monitoringStats keys length:", Object.keys(monitoringStats).length);
+    if (isRecording && activeSession?.status === "berlangsung" && Object.keys(monitoringStats).length > 0) {
+      const prev = JSON.parse(localStorage.getItem('sessionStats') || '[]');
+      prev.push({
+        timestamp: new Date().toISOString(),
+        stats: { ...monitoringStats }
+      });
+      localStorage.setItem('sessionStats', JSON.stringify(prev));
+      console.log("Saving to localStorage:", monitoringStats);
+    }
+  }, [isRecording, monitoringStats, activeSession]);
+
+  // Derived state
+  const filteredPrajurit = prajurit.filter(p => {
+    const matchSearch = p.full_name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchUnit = unitFilter === "semua" || p.unit_name === unitFilter;
+    const matchRank = rankFilter === "semua" || p.rank_name === rankFilter;
+    return matchSearch && matchUnit && matchRank;
+  });
+
+  console.log("KomandanDashboard Render: activeSessionId:", activeSessionId, "activeSession:", activeSession);
+  if (activeSession) {
+    console.log("KomandanDashboard Render: activeSession.participants:", activeSession.participants);
+  }
+  console.log("KomandanDashboard Render: monitoringStats at render:", monitoringStats);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -519,7 +391,6 @@ export default function KomandanDashboard() {
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            // Redirect ke halaman edit, misal /komandan/kelola_latihan?id=ID
                             window.location.href = `/komandan/kelola_latihan?id=${session.id}`;
                           }}
                         >
@@ -528,13 +399,20 @@ export default function KomandanDashboard() {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => {
-                            // Hapus dari state, atau panggil server action hapus jika sudah ada
-                            setAllSessions(prev => prev.filter(s => s.id !== session.id));
-                            // TODO: Panggil server action hapus jika sudah ada
-                          }}
+                          asChild
                         >
-                          Hapus
+                          <DeleteConfirmationDialog
+                            itemToDelete="sesi latihan ini"
+                            onConfirm={async () => {
+                              const result = await deleteSession(session.id);
+                              if (result.success) {
+                                toast.success(result.message);
+                                setAllSessions(await getAllSessions());
+                              } else {
+                                toast.error(result.message);
+                              }
+                            }}
+                          />
                         </Button>
                       </div>
                     </div>
@@ -547,108 +425,137 @@ export default function KomandanDashboard() {
             </Card>
           </TabsContent>
           <TabsContent value="sesi-aktif">
-            {allSessions.some(s => s.status === 'berlangsung') ? (
-              allSessions
-                .filter(s => s.status === 'berlangsung')
-                .map((session) => (
-                  <Card key={session.id}>
-                    <CardHeader>
-                      <div className='flex justify-between items-start'>
-                        <div>
-                          <CardTitle>{session.name}</CardTitle>
-                          <CardDescription>
-                            <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                              <span className="flex items-center gap-1"><MapPin size={14} /> {session.location?.name || "-"}</span>
-                              <span className="flex items-center gap-1"><Clock size={14} /> {new Date(session.scheduled_at).toLocaleString("id-ID")}</span>
-                            </div>
-                          </CardDescription>
+            {activeSession ? (
+              <Card key={activeSession.id}>
+                <CardHeader>
+                  <div className='flex justify-between items-start'>
+                    <div>
+                      <CardTitle>{activeSession.name}</CardTitle>
+                      <CardDescription>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                          <span className="flex items-center gap-1"><MapPin size={14} /> {activeSession.location?.name || "-"}</span>
+                          <span className="flex items-center gap-1"><Clock size={14} /> {new Date(activeSession.scheduled_at).toLocaleString("id-ID")}
+                          </span>
                         </div>
-                        <div className="flex gap-2">
-                          {!isRecording && (
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      {!isRecording && (
+                        <Dialog>
+                          <DialogTrigger asChild>
                             <Button onClick={handleStartRecording} variant="success">
                               <Play className="mr-2 h-4 w-4" /> Mulai Sesi Latihan
                             </Button>
-                          )}
-                          {isRecording && (
-                            <Button
-                              onClick={handleStopRecording}
-                              variant="destructive"
-                            >
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Mulai Sesi Latihan?</DialogTitle>
+                              <DialogDescription>
+                                {`Apakah Anda yakin ingin memulai sesi "${activeSession.name}"? Tindakan ini akan mulai merekam data dari perangkat prajurit.`}
+                              </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                              <DialogClose asChild>
+                                <Button variant="outline">Batal</Button>
+                              </DialogClose>
+                              <Button onClick={() => handleSetActiveSession(activeSession)}>Ya, Mulai Sesi</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      )}
+                      {isRecording && (
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="destructive">
                               <Square className="mr-2 h-4 w-4" /> Selesai Sesi Latihan
                             </Button>
-                          )}
-                          {/* Tombol Batalkan Sesi */}
-                          <Button
-                            onClick={async () => {
-                              setIsRecording(false);
-                              await setSessionCancelled(session.id);
-                              setActiveSessionId(null);
-                              setTabValue("sesi-latihan");
-                              setAllSessions(await getAllSessions());
-                            }}
-                            variant="outline"
-                          >
-                            Batalkan Sesi
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div>
-                        <h3 className="mb-4 text-lg font-semibold">Peserta Sesi</h3>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                          {(session.participants || []).map((prajurit) => {
-                            const stats = monitoringStats[prajurit.id] || {};
-                            return (
-                              <Card key={prajurit.id} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800">
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <Avatar className="h-8 w-8">
-                                      <AvatarImage src={prajurit.avatar} />
-                                      <AvatarFallback>{prajurit.full_name?.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    {prajurit.full_name}
-                                    {prajurit.deviceConnected && (
-                                      <Wifi className="text-green-500 ml-2" size={16} title="Device Terhubung" />
-                                    )}
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                                    <div className="flex items-center gap-1">
-                                      <Heart size={14} className="text-red-500" />
-                                      <span>Detak Jantung:</span>
-                                      <span className="font-bold">{stats.heartRate ? stats.heartRate : "-"} bpm</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <Zap size={14} className="text-blue-500" />
-                                      <span>Kecepatan:</span>
-                                      <span className="font-bold">{stats.speed ? stats.speed.toFixed(1) : "-"} km/jam</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <Activity size={14} className="text-green-500" />
-                                      <span>Status:</span>
-                                      <span className="font-bold">{stats.status || "-"}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <MapPin size={14} className="text-purple-500" />
-                                      <span>Lokasi:</span>
-                                      <span className="font-bold">{stats.lat && stats.lng ? `${stats.lat.toFixed(5)}, ${stats.lng.toFixed(5)}` : "-"}</span>
-                                    </div>
-                                  </div>
-                                  {/* Optional: Mini Map */}
-                                  <div className="mt-2">
-                                    <MiniMapbox lat={stats.lat} lng={stats.lng} />
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Hentikan Sesi Latihan?</DialogTitle>
+                              <DialogDescription>
+                                {`Apakah Anda yakin ingin menghentikan sesi "${activeSession.name}"? Sesi akan diarsipkan dan tidak bisa dilanjutkan kembali.`}
+                              </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                              <DialogClose asChild>
+                                <Button variant="outline">Batal</Button>
+                              </DialogClose>
+                              <Button variant="destructive" onClick={() => handleStopRecording(activeSession)}>Ya, Hentikan Sesi</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      )}
+                      <Button
+                        onClick={async () => {
+                          setIsRecording(false);
+                          await setSessionCancelled(activeSession.id);
+                          setActiveSessionId(null);
+                          setTabValue("sesi-latihan");
+                          setAllSessions(await getAllSessions());
+                        }}
+                        variant="outline"
+                      >
+                        Batalkan Sesi
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div>
+                    <h3 className="mb-4 text-lg font-semibold">Peserta Sesi</h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {(activeSession.participants || []).map((prajurit) => {
+                        const stats = monitoringStats[prajurit.id] || {};
+                        return (
+                          <Card key={prajurit.id} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800">
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={prajurit.avatar} />
+                                  <AvatarFallback>{prajurit.full_name?.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                {prajurit.full_name}
+                                {prajurit.deviceConnected && (
+                                  <Wifi className="text-green-500 ml-2" size={16} title="Device Terhubung" />
+                                )}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                <div className="flex items-center gap-1">
+                                  <Heart size={14} className="text-red-500" />
+                                  <span>Detak Jantung:</span>
+                                  <span className="font-bold">{stats.heartRate ? stats.heartRate : "-"} bpm</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Zap size={14} className="text-blue-500" />
+                                  <span>Kecepatan:</span>
+                                  <span className="font-bold">{stats.speed ? stats.speed.toFixed(1) : "-"} km/jam</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Activity size={14} className="text-green-500" />
+                                  <span>Status:</span>
+                                  <span className="font-bold">{stats.status || "-"}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <MapPin size={14} className="text-purple-500" />
+                                  <span>Lokasi:</span>
+                                  <span className="font-bold">{stats.lat && stats.lng ? `${stats.lat.toFixed(5)}, ${stats.lng.toFixed(5)}` : "-"}</span>
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                {console.log(`MiniMapbox for ${prajurit.full_name} (${prajurit.id}) props: lat=${stats.lat}, lng=${stats.lng}`)}
+                                <MiniMapbox lat={stats.lat} lng={stats.lng} />
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             ) : (
               <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg">
                 <p className="text-gray-500">Tidak ada sesi latihan yang aktif.</p>
@@ -813,38 +720,28 @@ export default function KomandanDashboard() {
         </Tabs>
       </main>
 
-      {/* Modal Konfirmasi Mulai Sesi */}
-      <Dialog open={showStartConfirm} onOpenChange={setShowStartConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Mulai Sesi Latihan?</DialogTitle>
-            <DialogDescription>
-              {`Apakah Anda yakin ingin memulai sesi "${sessionToModify?.nama}"? Tindakan ini akan mulai merekam data dari perangkat prajurit.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStartConfirm(false)}>Batal</Button>
-            <Button onClick={startSession}>Ya, Mulai Sesi</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal Konfirmasi Hentikan Sesi */}
-      <Dialog open={showStopConfirm} onOpenChange={setShowStopConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Hentikan Sesi Latihan?</DialogTitle>
-            <DialogDescription>
-              {`Apakah Anda yakin ingin menghentikan sesi "${sessionToModify?.nama}"? Sesi akan diarsipkan dan tidak bisa dilanjutkan kembali.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStopConfirm(false)}>Batal</Button>
-            <Button variant="destructive" onClick={endSession}>Ya, Hentikan Sesi</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
     </div>
+  );
+}
+
+function DeleteConfirmationDialog({ itemToDelete, onConfirm }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tindakan ini tidak dapat diurungkan. Ini akan menghapus {itemToDelete} secara permanen dari server.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Batal</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Hapus</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

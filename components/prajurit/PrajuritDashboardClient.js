@@ -147,13 +147,18 @@ export default function PrajuritDashboardClient({
     const availableSessions = Array.isArray(initialAvailableSessions) ? initialAvailableSessions : [];
     const trainingHistory = Array.isArray(initialTrainingHistory) ? initialTrainingHistory : [];
 
+    console.log("PrajuritDashboardClient: initialAvailableSessions received:", initialAvailableSessions);
+    console.log("PrajuritDashboardClient: initialTrainingHistory received:", initialTrainingHistory);
+    console.log("PrajuritDashboardClient: availableSessions length:", availableSessions.length);
+    console.log("PrajuritDashboardClient: trainingHistory length:", trainingHistory.length);
+
     return (
         <div className="min-h-screen bg-gray-50 p-6">
             <div className="max-w-7xl mx-auto">
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Dashboard Prajurit</h1>
-                        <p className="text-gray-600">Selamat datang, {profile.name || 'Prajurit'}</p>
+                        <p className="text-gray-600">Selamat datang, {profile.full_name || 'Prajurit'}</p>
                     </div>
                     <div className="flex items-center gap-4">
                         <Button
@@ -189,12 +194,12 @@ export default function PrajuritDashboardClient({
                             <CardContent>
                                 <div className="flex items-center gap-6">
                                     <Avatar className="h-24 w-24">
-                                        <AvatarImage src={profile.avatar} alt={profile.name} />
-                                        <AvatarFallback className="text-lg">{(profile.name || 'P').split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                                        <AvatarImage src={profile.avatar} alt={profile.full_name} />
+                                        <AvatarFallback className="text-lg">{(profile.full_name || 'P').split(' ').map(n => n[0]).join('')}</AvatarFallback>
                                     </Avatar>
                                     <div className="grid gap-3 flex-1">
                                         <div className="grid grid-cols-2 gap-4">
-                                            <div><Label className="text-sm font-medium text-gray-600">Nama Lengkap</Label><p className="text-lg font-semibold">{profile.name || 'N/A'}</p></div>
+                                            <div><Label className="text-sm font-medium text-gray-600">Nama Lengkap</Label><p className="text-lg font-semibold">{profile.full_name || 'N/A'}</p></div>
                                             <div><Label className="text-sm font-medium text-gray-600">Username</Label><p className="text-lg font-semibold">{profile.username || 'N/A'}</p></div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
@@ -310,6 +315,9 @@ export default function PrajuritDashboardClient({
                                                         <div className="text-center"><p className="text-xs text-gray-600">Jarak</p><p className="text-lg font-semibold text-blue-600">{session.myStats?.totalDistance || 'N/A'} km</p></div>
                                                         <div className="text-center"><p className="text-xs text-gray-600">Performa</p><div className="mt-1">{getPerformanceBadge(session.myStats?.performance || 'baik')}</div></div>
                                                     </div>
+                                                    <Button variant="outline" size="sm" onClick={() => router.push(`/prajurit/history/${session.id}`)} className="w-full">
+                                                        Lihat Detail Latihan
+                                                    </Button>
                                                 </CardContent>
                                             </Card>
                                         ))}

@@ -24,8 +24,18 @@ export async function getAllLocations() {
 }
 
 // Cek konflik jadwal untuk prajurit
-export async function checkScheduleConflict(userIds, scheduledAt) {
+export async function checkScheduleConflict(userIds, scheduledAt, excludeSessionId = null) {
     try {
+        let whereConditions = [
+            inArray(session_participants.user_id, userIds),
+            eq(training_sessions.scheduled_at, scheduledAt),
+            ne(training_sessions.status, 'dibatalkan')
+        ];
+
+        if (excludeSessionId !== null) {
+            whereConditions.push(ne(training_sessions.id, excludeSessionId));
+        }
+
         const conflicts = await db.select({
             user_id: session_participants.user_id,
             session_id: session_participants.session_id,
@@ -34,13 +44,7 @@ export async function checkScheduleConflict(userIds, scheduledAt) {
         })
             .from(session_participants)
             .innerJoin(training_sessions, eq(session_participants.session_id, training_sessions.id))
-            .where(
-                and(
-                    inArray(session_participants.user_id, userIds),
-                    eq(training_sessions.scheduled_at, scheduledAt),
-                    ne(training_sessions.status, 'dibatalkan')
-                )
-            );
+            .where(and(...whereConditions));
         return conflicts;
     } catch (error) {
         console.error('Error checking schedule conflict:', error);
@@ -147,84 +151,128 @@ export async function getAllSessions() {
 
     return sessionsWithDetails;
 }
-export async function getAvailableUsersByRole(role, scheduledAt = null) {
-    // Cek di semua relasi, hanya ambil user yang tidak punya status "ikut" di sesi "berlangsung"
+
+export async function getAvailableUsersByRole(role, scheduledAt = null, excludeSessionId = null) {
     let relasiTable;
     if (role === "komandan") relasiTable = session_commanders;
     else if (role === "medis") relasiTable = session_medics;
     else relasiTable = session_participants;
 
-    // Query: user yang tidak punya sesi di waktu yang sama (jika scheduledAt diberikan)
-    let whereCondition;
-
-    if (scheduledAt) {
-        // Filter berdasarkan waktu yang dipilih
-        whereCondition = and(
-            eq(users.role, role),
-            notExists(
-                db.select()
-                    .from(relasiTable)
-                    .innerJoin(training_sessions, eq(relasiTable.session_id, training_sessions.id))
-                    .where(
-                        and(
-                            eq(relasiTable.user_id, users.id),
-                            eq(training_sessions.scheduled_at, scheduledAt),
-                            ne(training_sessions.status, 'dibatalkan')
-                        )
+    let whereConditions = [
+        eq(users.role, role),
+        notExists(
+            db.select()
+                .from(relasiTable)
+                .innerJoin(training_sessions, eq(relasiTable.session_id, training_sessions.id))
+                .where(
+                    and(
+                        eq(relasiTable.user_id, users.id),
+                        eq(training_sessions.scheduled_at, scheduledAt),
+                        ne(training_sessions.status, 'dibatalkan'),
+                        ...(excludeSessionId !== null ? [ne(training_sessions.id, excludeSessionId)] : [])
                     )
-            )
-        );
-    } else {
-        // Filter berdasarkan sesi aktif (behavior lama)
-        whereCondition = and(
-            eq(users.role, role),
-            notExists(
-                db.select()
-                    .from(relasiTable)
-                    .where(
-                        and(
-                            eq(relasiTable.user_id, users.id),
-                            eq(relasiTable.status, "ikut")
-                        )
-                    )
-            )
-        );
-    }
+                )
+        )
+    ];
 
     const result = await db.select()
         .from(users)
-        .where(whereCondition);
+        .where(and(...whereConditions));
 
     return result;
 }
+
 export async function getSessionById(id) {
-    // Ambil sesi latihan beserta relasi peserta, komandan, medis, lokasi
-    const sessions = await getAllSessions();
-    return sessions.find(s => s.id === Number(id)) || null;
+    // Ambil sesi berdasarkan ID
+    const [session] = await db.select().from(training_sessions).where(eq(training_sessions.id, Number(id)));
+
+    if (!session) return null;
+
+    // Ambil peserta
+    const participants = await db.select({
+        id: users.id,
+        full_name: users.full_name,
+        avatar: users.avatar,
+        unit_id: users.unit_id,
+        rank_id: users.rank_id,
+    })
+        .from(session_participants)
+        .innerJoin(users, eq(session_participants.user_id, users.id))
+        .where(eq(session_participants.session_id, session.id));
+
+    // Ambil komandan
+    const commanders = await db.select({
+        id: users.id,
+        full_name: users.full_name,
+    })
+        .from(session_commanders)
+        .innerJoin(users, eq(session_commanders.user_id, users.id))
+        .where(eq(session_commanders.session_id, session.id));
+
+    // Ambil medis
+    const medics = await db.select({
+        id: users.id,
+        full_name: users.full_name,
+    })
+        .from(session_medics)
+        .innerJoin(users, eq(session_medics.user_id, users.id))
+        .where(eq(session_medics.session_id, session.id));
+
+    // Ambil lokasi
+    const location = await db.select().from(training_locations).where(eq(training_locations.id, session.location_id));
+
+    return {
+        ...session,
+        participants,
+        commanders,
+        medics,
+        location: location[0] || null,
+    };
 }
+
 export async function updateSessionAction(id, form) {
     try {
-        // Update data utama sesi
-        await db.update(training_sessions)
-            .set({
-                name: form.name,
-                description: form.description,
-                scheduled_at: form.scheduled_at,
-                location_id: Number(form.location_id),
-                // status: ... (jika ingin bisa update status)
-            })
-            .where(eq(training_sessions.id, id));
+        await db.transaction(async (tx) => {
+            // 1. Update data utama sesi
+            await tx.update(training_sessions)
+                .set({
+                    name: form.name,
+                    description: form.description,
+                    scheduled_at: form.scheduled_at,
+                    location_id: Number(form.location_id),
+                })
+                .where(eq(training_sessions.id, id));
 
-        // (Opsional) Update relasi peserta, komandan, medis
-        // Biasanya: hapus semua relasi lama, insert ulang dari form
+            // 2. Hapus relasi lama
+            await tx.delete(session_commanders).where(eq(session_commanders.session_id, id));
+            await tx.delete(session_participants).where(eq(session_participants.session_id, id));
+            await tx.delete(session_medics).where(eq(session_medics.session_id, id));
 
-        // ...implementasi update relasi...
+            // 3. Insert relasi baru
+            if (form.commanders && form.commanders.length > 0) {
+                await tx.insert(session_commanders).values(
+                    form.commanders.map(user_id => ({ session_id: id, user_id }))
+                );
+            }
+            if (form.participants && form.participants.length > 0) {
+                await tx.insert(session_participants).values(
+                    form.participants.map(user_id => ({ session_id: id, user_id }))
+                );
+            }
+            if (form.medics && form.medics.length > 0) {
+                await tx.insert(session_medics).values(
+                    form.medics.map(user_id => ({ session_id: id, user_id }))
+                );
+            }
+        });
 
-        return { success: true };
+        return { success: true, message: "Sesi latihan berhasil diperbarui." };
     } catch (err) {
+        console.error("Update session error:", err);
         return { success: false, message: err.message };
     }
 }
+
 export async function setSessionActive(id) {
     try {
         await db.update(training_sessions)
@@ -249,7 +297,19 @@ export async function setSessionCancelled(sessionId) {
     }
 }
 export async function getSessionStats(sessionId) {
-    const stats = await db.select().from(live_monitoring_stats).where(eq(live_monitoring_stats.session_id, sessionId));
+    const stats = await db.select({
+        timestamp: live_monitoring_stats.timestamp,
+        heart_rate: live_monitoring_stats.heart_rate,
+        speed_kph: live_monitoring_stats.speed_kph,
+        latitude: live_monitoring_stats.latitude,
+        longitude: live_monitoring_stats.longitude,
+        user_id: live_monitoring_stats.user_id,
+        full_name: users.full_name, // Menambahkan full_name
+        avatar: users.avatar, // Menambahkan avatar
+    })
+        .from(live_monitoring_stats)
+        .leftJoin(users, eq(live_monitoring_stats.user_id, users.id))
+        .where(eq(live_monitoring_stats.session_id, sessionId));
     return stats;
 }
 export async function setSessionFinished(id) {
@@ -263,5 +323,24 @@ export async function setSessionFinished(id) {
         return { success: true };
     } catch (err) {
         return { success: false, message: err.message };
+    }
+}
+
+export async function deleteSession(sessionId) {
+    try {
+        await db.transaction(async (tx) => {
+            // Hapus entri terkait di tabel relasi
+            await tx.delete(session_commanders).where(eq(session_commanders.session_id, sessionId));
+            await tx.delete(session_participants).where(eq(session_participants.session_id, sessionId));
+            await tx.delete(session_medics).where(eq(session_medics.session_id, sessionId));
+            await tx.delete(live_monitoring_stats).where(eq(live_monitoring_stats.session_id, sessionId));
+
+            // Hapus sesi utama
+            await tx.delete(training_sessions).where(eq(training_sessions.id, sessionId));
+        });
+        return { success: true, message: "Sesi latihan berhasil dihapus." };
+    } catch (err) {
+        console.error("Error deleting session:", err);
+        return { success: false, message: "Gagal menghapus sesi latihan." };
     }
 }

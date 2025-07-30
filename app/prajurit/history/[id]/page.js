@@ -3,7 +3,7 @@ import HistoryDetailClient from "@/components/prajurit/HistoryDetailClient";
 
 export default async function HistoryDetailPage({ params }) {
     try {
-        const { id } = params;
+        const id = params.id; // Mengubah destructuring menjadi akses properti langsung
         const result = await getHistoryDetail(id);
 
         // Jika terjadi error atau data tidak ditemukan, kita teruskan pesan errornya
