@@ -15,6 +15,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ScrollArea } from '@/components/Shadcn/scroll-area';
 import { Stethoscope, User, BookHeart, PlusCircle, Search } from 'lucide-react';
 import { saveMedicalRecord, getMedicalRecordsByUserId } from '@/actions/medis/medical_record';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/Shadcn/form";
+
+const medicalRecordSchema = z.object({
+    generalCondition: z.string().nonempty("Kondisi umum harus diisi."),
+    notes: z.string().optional(),
+    weight: z.coerce.number().positive("Berat badan harus angka positif."),
+    height: z.coerce.number().positive("Tinggi badan harus angka positif."),
+    bloodPressure: z.string().regex(/^\d{2,3}\/\d{2,3}$/, "Format tekanan darah tidak valid (misal: 120/80)."),
+    pulse: z.coerce.number().positive("Denyut nadi harus angka positif."),
+    temperature: z.coerce.number().optional(),
+    glucose: z.coerce.number().optional(),
+    cholesterol: z.coerce.number().optional(),
+    hemoglobin: z.coerce.number().optional(),
+    otherDiseases: z.string().optional(),
+});
 
 const initialFormData = {
     generalCondition: 'Baik',
@@ -33,8 +51,24 @@ const initialFormData = {
 export default function MedisForm({ soldiers, currentMedic }) {
     const [medicalRecords, setMedicalRecords] = useState([]);
     const [selectedSoldier, setSelectedSoldier] = useState(null);
-    const [formData, setFormData] = useState(initialFormData);
     const [isSoldierPickerOpen, setIsSoldierPickerOpen] = useState(false);
+
+    const form = useForm({
+        resolver: zodResolver(medicalRecordSchema),
+        defaultValues: {
+            generalCondition: 'Baik',
+            notes: '',
+            weight: '',
+            height: '',
+            bloodPressure: '',
+            pulse: '',
+            temperature: '',
+            glucose: '',
+            cholesterol: '',
+            hemoglobin: '',
+            otherDiseases: 'Tidak ada',
+        },
+    });
 
     // Fetch riwayat medis dari database setiap kali prajurit dipilih
     useEffect(() => {
@@ -51,49 +85,36 @@ export default function MedisForm({ soldiers, currentMedic }) {
 
     const handleSoldierSelect = (soldier) => {
         setSelectedSoldier(soldier);
-        setFormData(initialFormData);
+        form.reset();
         setIsSoldierPickerOpen(false);
         // Fetch otomatis di useEffect
     };
 
-    const handleInputChange = (e) => {
-        const { id, value } = e.target;
-        setFormData(prev => ({ ...prev, [id]: value }));
-    };
-
-    const handleSelectChange = (id, value) => {
-        setFormData(prev => ({ ...prev, [id]: value }));
-    };
-
     const calculateBMI = () => {
-        if (formData.weight && formData.height) {
-            const heightInMeters = formData.height / 100;
-            const bmi = (formData.weight / (heightInMeters * heightInMeters)).toFixed(1);
-            return bmi;
+        const weight = form.watch("weight");
+        const height = form.watch("height");
+        if (weight && height) {
+            const heightInMeters = height / 100;
+            return (weight / (heightInMeters * heightInMeters)).toFixed(1);
         }
         return 'N/A';
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const onSubmit = async (values) => {
         if (!selectedSoldier) {
             toast.error("Silakan pilih prajurit terlebih dahulu.");
             return;
         }
-        if (!formData.weight || !formData.height || !formData.bloodPressure || !formData.pulse) {
-            toast.error("Harap isi kolom Berat, Tinggi, Tekanan Darah, dan Denyut Nadi.");
-            return;
-        }
 
         const result = await saveMedicalRecord({
-            ...formData,
+            ...values,
             userId: selectedSoldier.id,
             examinerId: currentMedic.id,
         });
 
         if (result.success) {
             toast.success(`Rekam medis untuk ${selectedSoldier.full_name} berhasil disimpan.`);
-            setFormData(initialFormData);
+            form.reset();
             // Fetch ulang riwayat medis setelah insert
             getMedicalRecordsByUserId(selectedSoldier.id).then(res => {
                 if (res.success) setMedicalRecords(res.records);
@@ -115,104 +136,163 @@ export default function MedisForm({ soldiers, currentMedic }) {
                         <CardDescription>Pilih prajurit dan isi detail pemeriksaan di bawah ini.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div>
-                                <Label className="text-base font-semibold">Prajurit yang Diperiksa</Label>
-                                <div className="flex items-center gap-4 mt-2">
-                                    <Button type="button" variant="outline" onClick={() => setIsSoldierPickerOpen(true)} className="flex-1 justify-start text-left font-normal">
-                                        {selectedSoldier ? (
-                                            <div className="flex items-center gap-2">
-                                                <Avatar className="h-6 w-6">
-                                                    <AvatarImage src={selectedSoldier.avatar} />
-                                                    <AvatarFallback>{selectedSoldier.full_name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                                                </Avatar>
-                                                <span>{selectedSoldier.full_name}</span>
-                                            </div>
-                                        ) : "Pilih prajurit..."}
-                                    </Button>
-                                    <SoldierPickerDialog
-                                        isOpen={isSoldierPickerOpen}
-                                        setIsOpen={setIsSoldierPickerOpen}
-                                        onSoldierSelect={handleSoldierSelect}
-                                        soldiers={soldiers}
-                                    />
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                                <div>
+                                    <Label className="text-base font-semibold">Prajurit yang Diperiksa</Label>
+                                    <div className="flex items-center gap-4 mt-2">
+                                        <Button type="button" variant="outline" onClick={() => setIsSoldierPickerOpen(true)} className="flex-1 justify-start text-left font-normal">
+                                            {selectedSoldier ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="h-6 w-6">
+                                                        <AvatarImage src={selectedSoldier.avatar} />
+                                                        <AvatarFallback>{selectedSoldier.full_name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                                                    </Avatar>
+                                                    <span>{selectedSoldier.full_name}</span>
+                                                </div>
+                                            ) : "Pilih prajurit..."}
+                                        </Button>
+                                        <SoldierPickerDialog
+                                            isOpen={isSoldierPickerOpen}
+                                            setIsOpen={setIsSoldierPickerOpen}
+                                            onSoldierSelect={handleSoldierSelect}
+                                            soldiers={soldiers}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
 
-                            <Separator />
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="space-y-4 p-4 border rounded-lg">
-                                    <h3 className="font-semibold text-lg">Data Vital</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <Label htmlFor="weight">Berat (kg)</Label>
-                                            <Input id="weight" type="number" value={formData.weight} onChange={handleInputChange} className="mt-1" />
+                                <Separator />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div className="space-y-4 p-4 border rounded-lg">
+                                        <h3 className="font-semibold text-lg">Data Vital</h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <Label htmlFor="weight">Berat (kg)</Label>
+                                                <FormField control={form.control} name="weight" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormControl><Input id="weight" type="number" {...field} /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="height">Tinggi (cm)</Label>
+                                                <FormField control={form.control} name="height" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormControl><Input id="height" type="number" {...field} /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </div>
                                         </div>
                                         <div>
-                                            <Label htmlFor="height">Tinggi (cm)</Label>
-                                            <Input id="height" type="number" value={formData.height} onChange={handleInputChange} className="mt-1" />
+                                            <Label>Indeks Massa Tubuh (IMT)</Label>
+                                            <Input value={calculateBMI()} disabled className="mt-1 bg-gray-100" />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="bloodPressure">Tekanan Darah (mmHg)</Label>
+                                            <FormField control={form.control} name="bloodPressure" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input id="bloodPressure" {...field} placeholder="cth: 120/80" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="pulse">Denyut Nadi (bpm)</Label>
+                                            <FormField control={form.control} name="pulse" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input id="pulse" type="number" {...field} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="temperature">Suhu (°C)</Label>
+                                            <FormField control={form.control} name="temperature" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input id="temperature" type="number" step="0.1" {...field} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
                                         </div>
                                     </div>
-                                    <div>
-                                        <Label>Indeks Massa Tubuh (IMT)</Label>
-                                        <Input value={calculateBMI()} disabled className="mt-1 bg-gray-100" />
+                                    <div className="space-y-4 p-4 border rounded-lg">
+                                        <h3 className="font-semibold text-lg">Data Lab & Kondisi</h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <Label htmlFor="glucose">Gula Darah (mg/dL)</Label>
+                                                <FormField control={form.control} name="glucose" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormControl><Input id="glucose" type="number" {...field} /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="cholesterol">Kolesterol (mg/dL)</Label>
+                                                <FormField control={form.control} name="cholesterol" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormControl><Input id="cholesterol" type="number" {...field} /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="hemoglobin">Hemoglobin (g/dL)</Label>
+                                            <FormField control={form.control} name="hemoglobin" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input id="hemoglobin" type="number" step="0.1" {...field} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="generalCondition">Kondisi Umum</Label>
+                                            <FormField control={form.control} name="generalCondition" render={({ field }) => (
+                                                <FormItem>
+                                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                        <SelectTrigger id="generalCondition" className="mt-1">
+                                                            <SelectValue placeholder="Pilih kondisi" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="Baik">Baik</SelectItem>
+                                                            <SelectItem value="Cukup">Cukup</SelectItem>
+                                                            <SelectItem value="Kurang">Kurang</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="otherDiseases">Riwayat Penyakit Lain</Label>
+                                            <FormField control={form.control} name="otherDiseases" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input id="otherDiseases" {...field} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                        </div>
                                     </div>
-                                    <div>
-                                        <Label htmlFor="bloodPressure">Tekanan Darah (mmHg)</Label>
-                                        <Input id="bloodPressure" value={formData.bloodPressure} onChange={handleInputChange} placeholder="cth: 120/80" className="mt-1" />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="pulse">Denyut Nadi (bpm)</Label>
-                                        <Input id="pulse" type="number" value={formData.pulse} onChange={handleInputChange} className="mt-1" />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="temperature">Suhu (°C)</Label>
-                                        <Input id="temperature" type="number" step="0.1" value={formData.temperature} onChange={handleInputChange} className="mt-1" />
+                                    <div className="md:col-span-2">
+                                        <Label htmlFor="notes">Catatan Pemeriksaan</Label>
+                                        <FormField control={form.control} name="notes" render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl><Textarea id="notes" {...field} rows={4} placeholder="Tulis catatan tambahan di sini..." /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )} />
                                     </div>
                                 </div>
-                                <div className="space-y-4 p-4 border rounded-lg">
-                                    <h3 className="font-semibold text-lg">Data Lab & Kondisi</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <Label htmlFor="glucose">Gula Darah (mg/dL)</Label>
-                                            <Input id="glucose" type="number" value={formData.glucose} onChange={handleInputChange} className="mt-1" />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="cholesterol">Kolesterol (mg/dL)</Label>
-                                            <Input id="cholesterol" type="number" value={formData.cholesterol} onChange={handleInputChange} className="mt-1" />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="hemoglobin">Hemoglobin (g/dL)</Label>
-                                        <Input id="hemoglobin" type="number" step="0.1" value={formData.hemoglobin} onChange={handleInputChange} className="mt-1" />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="generalCondition">Kondisi Umum</Label>
-                                        <Select value={formData.generalCondition} onValueChange={(v) => handleSelectChange('generalCondition', v)}>
-                                            <SelectTrigger id="generalCondition" className="mt-1">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Baik">Baik</SelectItem>
-                                                <SelectItem value="Cukup">Cukup</SelectItem>
-                                                <SelectItem value="Kurang">Kurang</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="otherDiseases">Riwayat Penyakit Lain</Label>
-                                        <Input id="otherDiseases" value={formData.otherDiseases} onChange={handleInputChange} className="mt-1" />
-                                    </div>
+                                <div className="flex justify-end">
+                                    <Button type="submit" size="lg" disabled={!selectedSoldier || form.formState.isSubmitting}>
+                                        {form.formState.isSubmitting ? "Menyimpan..." : "Simpan Catatan"}
+                                    </Button>
                                 </div>
-                                <div className="md:col-span-2">
-                                    <Label htmlFor="notes">Catatan Pemeriksaan</Label>
-                                    <Textarea id="notes" value={formData.notes} onChange={handleInputChange} rows={4} placeholder="Tulis catatan tambahan di sini..." className="mt-1" />
-                                </div>
-                            </div>
-                            <div className="flex justify-end">
-                                <Button type="submit" size="lg" disabled={!selectedSoldier}>Simpan Catatan</Button>
-                            </div>
-                        </form>
+                            </form>
+                        </Form>
                     </CardContent>
                 </Card>
             </div>

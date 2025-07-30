@@ -48,7 +48,7 @@ import {
 import { ScrollArea } from "@/components/Shadcn/scroll-area";
 import { Separator } from "@/components/Shadcn/separator";
 import { Label } from "@/components/Shadcn/label";
-import { getAllPrajurit, getPrajuritDetail } from "@/actions/komandan/prajurit_actions";
+import { getAllPrajurit, getPrajuritDetail, getAllUnits, getAllRanks } from "@/actions/komandan/prajurit_actions";
 import {
   getAllSessions,
   getSessionById,
@@ -216,6 +216,16 @@ export default function KomandanDashboard() {
     fetchPrajurit();
   }, []);
 
+  useEffect(() => {
+    async function fetchUnitsAndRanks() {
+      const units = await getAllUnits();
+      const ranks = await getAllRanks();
+      setUnitOptions(["semua", ...units.map(u => u.name)]);
+      setRankOptions(["semua", ...ranks.map(r => r.name)]);
+    }
+    fetchUnitsAndRanks();
+  }, []);
+
   // Handler untuk klik baris prajurit
   const handleShowPrajuritDetail = async (p) => {
     setLoadingDetail(true);
@@ -226,6 +236,18 @@ export default function KomandanDashboard() {
     setLoadingDetail(false);
   };
   const [searchTerm, setSearchTerm] = useState("");
+  const [unitFilter, setUnitFilter] = useState("semua");
+  const [rankFilter, setRankFilter] = useState("semua");
+  const [unitOptions, setUnitOptions] = useState(["semua"]);
+  const [rankOptions, setRankOptions] = useState(["semua"]);
+
+  // Filter prajurit berdasarkan search, unit, dan rank
+  const filteredPrajurit = prajurit.filter(p => {
+    const matchSearch = p.full_name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchUnit = unitFilter === "semua" || p.unit_name === unitFilter;
+    const matchRank = rankFilter === "semua" || p.rank_name === rankFilter;
+    return matchSearch && matchUnit && matchRank;
+  });
   const confirmStartSession = (session) => {
     setSessionToModify(session);
     setShowStartConfirm(true);
@@ -407,10 +429,6 @@ export default function KomandanDashboard() {
   const handleKelolaLatihan = () => {
     router.push('/komandan/kelola_latihan');
   };
-
-  const filteredPrajurit = prajurit.filter(p =>
-    p.full_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   // Handler untuk logout
   const handleLogout = async () => {
@@ -669,74 +687,9 @@ export default function KomandanDashboard() {
                         </div>
                         <Separator />
                         <div className="grid gap-2 text-sm">
-                          <div><span className="font-semibold">Unit:</span> {selectedPrajurit.unit_name}</div>
-                          <div><span className="font-semibold">Pangkat:</span> {selectedPrajurit.rank_name}</div>
+                          {/* <div><span className="font-semibold">Unit:</span> {selectedPrajurit.unit_name}</div>
+                          <div><span className="font-semibold">Pangkat:</span> {selectedPrajurit.rank_name}</div> */}
                           {/* Tambahkan field lain jika ada */}
-                        </div>
-                        <Separator />
-                        <div className="grid gap-2 text-sm">
-                          <div className="font-semibold">Riwayat Kesehatan:</div>
-                          {selectedPrajurit.medicalHistory && selectedPrajurit.medicalHistory.length > 0 ? (
-                            selectedPrajurit.medicalHistory.map((record, idx) => {
-                              // Hitung IMT
-                              let bmi = 'N/A';
-                              if (record.weight_kg && record.height_cm) {
-                                const heightM = record.height_cm / 100;
-                                bmi = (record.weight_kg / (heightM * heightM)).toFixed(1);
-                              }
-                              return (
-                                <div key={idx} className="p-3 border rounded-md text-xs bg-white dark:bg-zinc-900 shadow-sm mb-2">
-                                  {/* Data Pemeriksaan */}
-                                  <div className="mb-2">
-                                    <p className="font-semibold text-blue-700 dark:text-blue-300">
-                                      Pemeriksaan: {new Date(record.checkup_date).toLocaleDateString('id-ID')}
-                                    </p>
-                                    <div className="flex flex-wrap gap-x-6 gap-y-1 mt-1">
-                                      <span><strong>Pemeriksa:</strong> {record.examiner_id ?? '-'}</span>
-                                      <span><strong>Kondisi:</strong> {record.general_condition ?? '-'}</span>
-                                    </div>
-                                    <div className="mt-1">
-                                      <span><strong>Catatan:</strong> {record.notes ?? '-'}</span>
-                                    </div>
-                                  </div>
-                                  <Separator className="my-2" />
-
-                                  {/* Data Vital */}
-                                  <div className="mb-2">
-                                    <p className="font-semibold text-green-700 dark:text-green-300 mb-1">Data Vital</p>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1">
-                                      <span><strong>BB:</strong> {record.weight_kg ?? '-'} kg</span>
-                                      <span><strong>TB:</strong> {record.height_cm ?? '-'} cm</span>
-                                      <span><strong>IMT:</strong> {bmi}</span>
-                                      <span><strong>Tensi:</strong> {record.blood_pressure ?? '-'}</span>
-                                      <span><strong>Nadi:</strong> {record.pulse ?? '-'} bpm</span>
-                                      <span><strong>Suhu:</strong> {record.temperature ?? '-'} °C</span>
-                                    </div>
-                                  </div>
-                                  <Separator className="my-2" />
-
-                                  {/* Data Lab */}
-                                  <div className="mb-2">
-                                    <p className="font-semibold text-purple-700 dark:text-purple-300 mb-1">Data Lab</p>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1">
-                                      <span><strong>Gula Darah:</strong> {record.glucose ?? '-'} mg/dL</span>
-                                      <span><strong>Kolesterol:</strong> {record.cholesterol ?? '-'} mg/dL</span>
-                                      <span><strong>Hemoglobin:</strong> {record.hemoglobin ?? '-'} g/dL</span>
-                                    </div>
-                                  </div>
-                                  <Separator className="my-2" />
-
-                                  {/* Riwayat Penyakit Lain */}
-                                  <div>
-                                    <p className="font-semibold text-red-700 dark:text-red-300 mb-1">Riwayat Penyakit Lain</p>
-                                    <span>{record.other_diseases ?? '-'}</span>
-                                  </div>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <div className="text-gray-500">Belum ada riwayat kesehatan.</div>
-                          )}
                         </div>
                       </div>
                     ) : (
@@ -744,19 +697,47 @@ export default function KomandanDashboard() {
                     )}
                   </DialogContent>
                 </Dialog>
-                <div className="flex items-center gap-4 mb-4">
+                <div className="flex flex-wrap items-center gap-4 mb-4">
                   <Input
                     placeholder="Cari nama prajurit..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
+                    className="w-56"
                   />
+                  <Select value={unitFilter} onValueChange={setUnitFilter}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue>{unitFilter === "semua" ? "Semua Unit" : unitFilter}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {unitOptions.map((unit) => (
+                        <SelectItem key={unit} value={unit}>{unit === "semua" ? "Semua Unit" : unit}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={rankFilter} onValueChange={setRankFilter}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue>{rankFilter === "semua" ? "Semua Pangkat" : rankFilter}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rankOptions.map((rank) => (
+                        <SelectItem key={rank} value={rank}>{rank === "semua" ? "Semua Pangkat" : rank}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(unitFilter !== "semua" || rankFilter !== "semua") && (
+                    <Button variant="outline" size="sm" onClick={() => { setUnitFilter("semua"); setRankFilter("semua"); }}>
+                      Reset Filter
+                    </Button>
+                  )}
                 </div>
-                <div className="border rounded-lg">
+                <div className="border rounded-lg overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gray-100 dark:bg-gray-800">
                         <th className="p-3 text-left">Nama</th>
                         <th className="p-3 text-left">Email</th>
+                        <th className="p-3 text-left">Unit</th>
+                        <th className="p-3 text-left">Pangkat</th>
                         <th className="p-3 text-left">Status</th>
                       </tr>
                     </thead>
@@ -777,6 +758,8 @@ export default function KomandanDashboard() {
                             {p.full_name}
                           </td>
                           <td className="p-3">{p.email}</td>
+                          <td className="p-3">{p.unit_name || '-'}</td>
+                          <td className="p-3">{p.rank_name || '-'}</td>
                           <td className="p-3">
                             <Badge variant={p.is_active ? "default" : "secondary"} className={p.is_active ? "bg-green-500" : ""}>
                               {p.is_active ? "Aktif" : "Non-aktif"}

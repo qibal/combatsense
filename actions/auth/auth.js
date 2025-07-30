@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import * as jose from 'jose';
 import { cookies } from 'next/headers';
 
 /**
@@ -38,14 +38,22 @@ export async function loginAction({ email, password }) {
   }
 
   const { password_hash, ...userWithoutPassword } = user;
-  const token = jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
 
-  // Set cookie httpOnly
-  cookies().set('token', token, {
+  // Buat session token menggunakan jose
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+  const session = await new jose.SignJWT({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    fullName: user.full_name // Tambahkan info lain jika perlu
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('1d')
+    .sign(secret);
+
+  // Set cookie httpOnly dengan nama 'session'
+  cookies().set('session', session, {
     httpOnly: true,
     path: '/',
     maxAge: 60 * 60 * 24, // 1 hari

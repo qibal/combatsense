@@ -45,3 +45,13 @@ export async function getAllPrajurit() {
         medicalHistory,
     };
 }
+
+// Fungsi untuk mengambil semua unit
+export async function getAllUnits() {
+    return await db.select().from(units);
+}
+
+// Fungsi untuk mengambil semua pangkat
+export async function getAllRanks() {
+    return await db.select().from(ranks);
+}

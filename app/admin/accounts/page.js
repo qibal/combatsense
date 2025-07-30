@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Button } from '@/components/Shadcn/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/Shadcn/card';
 import { Input } from '@/components/Shadcn/input';
@@ -14,11 +17,34 @@ import { Label } from '@/components/Shadcn/label';
 import { Switch } from '@/components/Shadcn/switch';
 import { UserPlus, Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from "sonner";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/Shadcn/form";
 
 // Import server actions
-import { getFullUsersData, upsertUser, deleteUser, insertDummyUser } from '@/actions/admin/accounts/users_actions';
+import { getFullUsersData, upsertUser, deleteUser } from '@/actions/admin/accounts/users_actions';
 import { getRanks, addRank, updateRank, deleteRank } from '@/actions/admin/accounts/rank_actions';
 import { getUnits, addUnit, updateUnit, deleteUnit } from '@/actions/admin/accounts/unit_actions';
+
+// Skema validasi
+const userFormSchema = z.object({
+    full_name: z.string().min(3, "Nama lengkap minimal 3 karakter."),
+    email: z.string().email("Format email tidak valid."),
+    password: z.string().optional(),
+    role: z.enum(["admin", "prajurit", "komandan", "medis"], { required_error: "Role harus dipilih." }),
+    unit_id: z.coerce.number().positive({ message: "Unit harus dipilih." }),
+    rank_id: z.coerce.number().positive({ message: "Pangkat harus dipilih." }),
+    birth_date: z.string().optional(),
+    is_active: z.boolean(),
+});
+
+// Skema validasi untuk Unit
+const unitFormSchema = z.object({
+    name: z.string().min(1, "Nama unit tidak boleh kosong."),
+});
+
+// Skema validasi untuk Rank
+const rankFormSchema = z.object({
+    name: z.string().min(1, "Nama pangkat tidak boleh kosong."),
+});
 
 // Main component for account management
 export default function AccountsPage() {
@@ -191,7 +217,7 @@ export default function AccountsPage() {
                 <Button size="sm" variant={showOldest ? 'default' : 'outline'} onClick={() => { setShowOldest(!showOldest); setShowYoungest(false); }}>Usia Tertua</Button>
                 {/* Reset filter */}
                 <Button size="sm" variant="ghost" onClick={() => { setFilterRank(''); setFilterUnit(''); setFilterLetter(''); setShowYoungest(false); setShowOldest(false); }}>Reset</Button>
-                {/* Tombol tambah dummy user */}
+                {/* Tombol tambah dummy user
                 <Select value={dummyRole} onValueChange={setDummyRole}>
                     <SelectTrigger className="w-32"><SelectValue placeholder="Role Dummy" /></SelectTrigger>
                     <SelectContent>
@@ -204,7 +230,7 @@ export default function AccountsPage() {
                     const res = await insertDummyUser(dummyRole);
                     toast[res.success ? 'success' : 'error'](res.message);
                     if (res.success) fetchData();
-                }}>Tambah Dummy User</Button>
+                }}>Tambah Dummy User</Button> */}
             </div>
             {/* END FILTER BAR */}
 
@@ -395,39 +421,48 @@ function DeleteConfirmationDialog({ onConfirm }) {
 }
 
 function UserFormDialog({ isOpen, setIsOpen, editingUser, setEditingUser, units, ranks, onFinished }) {
-    const [formData, setFormData] = useState({});
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const form = useForm({
+        resolver: zodResolver(userFormSchema),
+        defaultValues: {
+            full_name: '',
+            email: '',
+            password: '',
+            role: '',
+            unit_id: '',
+            rank_id: '',
+            birth_date: '',
+            is_active: true
+        },
+    });
 
     useEffect(() => {
         if (editingUser) {
-            setFormData(editingUser);
+            form.reset(editingUser);
         } else {
-            setFormData({ full_name: '', email: '', password: '', role: '', unit_id: '', rank_id: '', is_active: true });
+            form.reset({
+                full_name: '', email: '', password: '', role: '',
+                unit_id: '', rank_id: '', birth_date: '', is_active: true
+            });
         }
-    }, [editingUser, isOpen]);
+    }, [editingUser, isOpen, form]);
 
     const handleOpenChange = (open) => {
         if (!open) {
             setEditingUser(null);
-            setFormData({ full_name: '', email: '', password: '', role: '', unit_id: '', rank_id: '', is_active: true });
+            form.reset();
         }
         setIsOpen(open);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-
-        const result = await upsertUser(editingUser?.id, formData);
-
+    const onSubmit = async (values) => {
+        const result = await upsertUser(editingUser?.id, values);
         if (result.success) {
             toast.success(result.message);
-            onFinished(); // Re-fetch data on parent
+            onFinished();
             handleOpenChange(false);
         } else {
             toast.error(result.message);
         }
-        setIsSubmitting(false);
     };
 
     return (
@@ -439,99 +474,88 @@ function UserFormDialog({ isOpen, setIsOpen, editingUser, setEditingUser, units,
                         {editingUser ? 'Perbarui detail pengguna.' : 'Isi detail untuk pengguna baru.'}
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit}>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="name" className="text-right">Nama</Label>
-                            <Input id="name" value={formData.full_name || ''} onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="email" className="text-right">Email</Label>
-                            <Input id="email" type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="password" className="text-right">Password</Label>
-                            <Input id="password" type="password" placeholder={editingUser ? 'Kosongkan jika tidak ganti' : ''} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="role" className="text-right">Role</Label>
-                            <Select value={formData.role || ''} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-                                <SelectTrigger className="col-span-3">
-                                    <SelectValue placeholder="Pilih role" />
-                                </SelectTrigger>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <FormField control={form.control} name="full_name" render={({ field }) => (
+                            <FormItem><FormLabel>Nama</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="email" render={({ field }) => (
+                            <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="password" render={({ field }) => (
+                            <FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" placeholder={editingUser ? 'Kosongkan jika tidak ganti' : ''} {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="role" render={({ field }) => (
+                            <FormItem><FormLabel>Role</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                     <SelectItem value="admin">Admin</SelectItem>
                                     <SelectItem value="prajurit">Prajurit</SelectItem>
                                     <SelectItem value="komandan">Komandan</SelectItem>
                                     <SelectItem value="medis">Medis</SelectItem>
                                 </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="unit" className="text-right">Unit</Label>
-                            <Select value={String(formData.unit_id || '')} onValueChange={(value) => setFormData({ ...formData, unit_id: parseInt(value) })}>
-                                <SelectTrigger className="col-span-3">
-                                    <SelectValue placeholder="Pilih unit" />
-                                </SelectTrigger>
+                            </Select><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="unit_id" render={({ field }) => (
+                            <FormItem><FormLabel>Unit</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value)}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Pilih unit" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                     {units.map(unit => <SelectItem key={unit.id} value={String(unit.id)}>{unit.name}</SelectItem>)}
                                 </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="rank" className="text-right">Pangkat</Label>
-                            <Select value={String(formData.rank_id || '')} onValueChange={(value) => setFormData({ ...formData, rank_id: parseInt(value) })}>
-                                <SelectTrigger className="col-span-3">
-                                    <SelectValue placeholder="Pilih pangkat" />
-                                </SelectTrigger>
+                            </Select><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="rank_id" render={({ field }) => (
+                            <FormItem><FormLabel>Pangkat</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value)}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Pilih pangkat" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                     {ranks.map(rank => <SelectItem key={rank.id} value={String(rank.id)}>{rank.name}</SelectItem>)}
                                 </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="birth_date" className="text-right">Tanggal Lahir</Label>
-                            <Input id="birth_date" type="date" value={formData.birth_date || ''} onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <Switch id="is_active" checked={formData.is_active} onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })} />
-                            <Label htmlFor="is_active">Aktif</Label>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Menyimpan...' : 'Simpan'}
-                        </Button>
-                    </DialogFooter>
-                </form>
+                            </Select><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="birth_date" render={({ field }) => (
+                            <FormItem><FormLabel>Tanggal Lahir</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="is_active" render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <FormLabel>Status Aktif</FormLabel>
+                                <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                            </FormItem>
+                        )} />
+                        <DialogFooter>
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting ? 'Menyimpan...' : 'Simpan'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
             </DialogContent>
         </Dialog>
     );
 }
 
 function UnitFormDialog({ isOpen, setIsOpen, editingUnit, setEditingUnit, onFinished }) {
-    const [name, setName] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const form = useForm({
+        resolver: zodResolver(unitFormSchema),
+        defaultValues: { name: '' },
+    });
 
     useEffect(() => {
-        setName(editingUnit ? editingUnit.name : '');
-    }, [editingUnit, isOpen]);
+        if (editingUnit) form.setValue('name', editingUnit.name);
+        else form.reset({ name: '' });
+    }, [editingUnit, isOpen, form]);
 
     const handleOpenChange = (open) => {
         if (!open) {
             setEditingUnit(null);
-            setName('');
+            form.reset();
         }
         setIsOpen(open);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-
+    const onSubmit = async (values) => {
         const result = editingUnit
-            ? await updateUnit(editingUnit.id, name)
-            : await addUnit(name);
+            ? await updateUnit(editingUnit.id, values.name)
+            : await addUnit(values.name);
 
         if (result.success) {
             toast.success(result.message);
@@ -540,7 +564,6 @@ function UnitFormDialog({ isOpen, setIsOpen, editingUnit, setEditingUnit, onFini
         } else {
             toast.error(result.message);
         }
-        setIsSubmitting(false);
     };
 
     return (
@@ -549,45 +572,50 @@ function UnitFormDialog({ isOpen, setIsOpen, editingUnit, setEditingUnit, onFini
                 <DialogHeader>
                     <DialogTitle>{editingUnit ? 'Edit Unit' : 'Tambah Unit Baru'}</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit}>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="unit-name" className="text-right">Nama Unit</Label>
-                            <Input id="unit-name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Menyimpan...' : 'Simpan'}</Button>
-                    </DialogFooter>
-                </form>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <FormField control={form.control} name="name" render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Nama Unit</FormLabel>
+                                <FormControl><Input {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )} />
+                        <DialogFooter>
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting ? 'Menyimpan...' : 'Simpan'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
             </DialogContent>
         </Dialog>
     );
 }
 
 function RankFormDialog({ isOpen, setIsOpen, editingRank, setEditingRank, onFinished }) {
-    const [name, setName] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const form = useForm({
+        resolver: zodResolver(rankFormSchema),
+        defaultValues: { name: '' },
+    });
 
     useEffect(() => {
-        setName(editingRank ? editingRank.name : '');
-    }, [editingRank, isOpen]);
+        if (editingRank) form.setValue('name', editingRank.name);
+        else form.reset({ name: '' });
+    }, [editingRank, isOpen, form]);
 
     const handleOpenChange = (open) => {
         if (!open) {
             setEditingRank(null);
-            setName('');
+            form.reset();
         }
         setIsOpen(open);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-
+    const onSubmit = async (values) => {
         const result = editingRank
-            ? await updateRank(editingRank.id, name)
-            : await addRank(name);
+            ? await updateRank(editingRank.id, values.name)
+            : await addRank(values.name);
 
         if (result.success) {
             toast.success(result.message);
@@ -596,7 +624,6 @@ function RankFormDialog({ isOpen, setIsOpen, editingRank, setEditingRank, onFini
         } else {
             toast.error(result.message);
         }
-        setIsSubmitting(false);
     };
 
     return (
@@ -605,17 +632,22 @@ function RankFormDialog({ isOpen, setIsOpen, editingRank, setEditingRank, onFini
                 <DialogHeader>
                     <DialogTitle>{editingRank ? 'Edit Pangkat' : 'Tambah Pangkat Baru'}</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit}>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="rank-name" className="text-right">Nama Pangkat</Label>
-                            <Input id="rank-name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Menyimpan...' : 'Simpan'}</Button>
-                    </DialogFooter>
-                </form>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <FormField control={form.control} name="name" render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Nama Pangkat</FormLabel>
+                                <FormControl><Input {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )} />
+                        <DialogFooter>
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting ? 'Menyimpan...' : 'Simpan'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
             </DialogContent>
         </Dialog>
     );
