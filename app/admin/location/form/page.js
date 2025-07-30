@@ -83,7 +83,7 @@ export default function FormLocationPage() {
                 }
             })();
         }
-    }, [id]);
+    }, [id, form]); // Tambahkan 'form' ke dependency array
 
     const handleChange = e => {
         const { name, value, files } = e.target;
