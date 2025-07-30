@@ -118,7 +118,7 @@ export default function LoginPage() {
                             )}
                         </Button>
                     </form>
-                    <Button
+                    {/* <Button
                         type="button"
                         className="w-full mt-4"
                         variant="outline"
@@ -126,7 +126,7 @@ export default function LoginPage() {
                         disabled={adminLoading}
                     >
                         {adminLoading ? 'Membuat Admin...' : 'Buat Admin Default'}
-                    </Button>
+                    </Button> */}
                 </CardContent>
             </Card>
         </div>
