@@ -3,13 +3,25 @@
 import { db } from "@/lib/db";
 import { training_sessions, users, session_participants, training_locations, session_commanders } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
-
-// ID pengguna yang sedang login akan didapatkan dari sesi autentikasi nanti.
-// Untuk sekarang, kita gunakan nilai statis untuk pengembangan.
-const LOGGED_IN_USER_ID = 1; // Ubah ke number
+import { getCurrentUserId } from "@/lib/auth-utils";
 
 export async function getAvailableSessions() {
     try {
+        const currentUserId = await getCurrentUserId();
+        if (!currentUserId) {
+            return { success: false, message: "User tidak terautentikasi" };
+        }
+
+        // Debug: Cek apakah ada data di tabel training_sessions
+        const allSessions = await db.select().from(training_sessions);
+        console.log("DEBUG: Total sessions in database:", allSessions.length);
+        console.log("DEBUG: All sessions data:", allSessions);
+
+        // Debug: Cek apakah ada data di tabel session_participants
+        const allParticipants = await db.select().from(session_participants);
+        console.log("DEBUG: Total participants in database:", allParticipants.length);
+        console.log("DEBUG: All participants data:", allParticipants);
+
         // Subquery ini berfungsi untuk menghitung jumlah peserta (prajurit)
         // yang sudah terdaftar di setiap sesi latihan.
         const participantsCountSubquery = db
@@ -23,7 +35,7 @@ export async function getAvailableSessions() {
             .as('participants_count_sq'); // 'as' untuk memberi alias pada subquery
 
         // Query utama untuk mengambil data sesi yang tersedia
-        const availableSessions = await db.select({
+        const availableSessionsRaw = await db.select({
             id: training_sessions.id,
             name: training_sessions.name,
             // 'scheduled_at' berisi tanggal dan waktu, bisa dipisah di frontend jika perlu
@@ -47,9 +59,21 @@ export async function getAvailableSessions() {
             .leftJoin(users, eq(session_commanders.user_id, users.id)) // Menggunakan users alias untuk komandan
             // Join dengan subquery untuk mendapatkan jumlah peserta
             .leftJoin(participantsCountSubquery, eq(training_sessions.id, participantsCountSubquery.sessionId))
-            .where(sql`${training_sessions.status} = 'direncanakan' OR ${training_sessions.status} = 'berlangsung'`); // Filter status
+            .where(sql`${training_sessions.status} = 'direncanakan' OR ${training_sessions.status} = 'berlangsung'`); // Hapus .distinct()
+
+        // Filter agar hanya sesi unik berdasarkan id
+        const seen = new Set();
+        const availableSessions = [];
+        for (const session of availableSessionsRaw) {
+            if (!seen.has(session.id)) {
+                availableSessions.push(session);
+                seen.add(session.id);
+            }
+        }
 
         console.log("getAvailableSessions result:", availableSessions); // Tambahkan log ini
+        console.log("DEBUG: Available sessions count:", availableSessions.length);
+
         return { success: true, data: availableSessions };
     } catch (error) {
         console.error("Error fetching available sessions:", error);

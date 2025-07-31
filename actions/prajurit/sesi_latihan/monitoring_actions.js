@@ -3,14 +3,18 @@
 import { db } from "@/lib/db";
 import { eq, and, desc } from "drizzle-orm";
 import { live_monitoring_stats, training_sessions, session_participants } from "@/lib/schema";
-
-const LOGGED_IN_USER_ID = 1; // Ubah sesuai user yang login
+import { getCurrentUserId } from "@/lib/auth-utils";
 
 /**
  * Mengambil data monitoring real-time untuk prajurit yang sedang dalam sesi aktif
  */
 export async function getCurrentMonitoringData() {
     try {
+        const currentUserId = await getCurrentUserId();
+        if (!currentUserId) {
+            return { success: false, message: "User tidak terautentikasi" };
+        }
+
         // Cari sesi yang sedang berlangsung dan prajurit terlibat
         const activeSession = await db.select({
             session_id: training_sessions.id,
@@ -19,7 +23,7 @@ export async function getCurrentMonitoringData() {
             .from(session_participants)
             .innerJoin(training_sessions, eq(session_participants.session_id, training_sessions.id))
             .where(and(
-                eq(session_participants.user_id, LOGGED_IN_USER_ID),
+                eq(session_participants.user_id, currentUserId),
                 eq(training_sessions.status, 'berlangsung')
             ))
             .limit(1);
@@ -39,7 +43,7 @@ export async function getCurrentMonitoringData() {
             .from(live_monitoring_stats)
             .where(and(
                 eq(live_monitoring_stats.session_id, activeSession[0].session_id),
-                eq(live_monitoring_stats.user_id, LOGGED_IN_USER_ID)
+                eq(live_monitoring_stats.user_id, currentUserId)
             ))
             .orderBy(desc(live_monitoring_stats.timestamp))
             .limit(1);
@@ -77,6 +81,11 @@ export async function getCurrentMonitoringData() {
  */
 export async function getMonitoringHistory(sessionId) {
     try {
+        const currentUserId = await getCurrentUserId();
+        if (!currentUserId) {
+            return { success: false, message: "User tidak terautentikasi" };
+        }
+
         const stats = await db.select({
             heart_rate: live_monitoring_stats.heart_rate,
             speed_kph: live_monitoring_stats.speed_kph,
@@ -87,7 +96,7 @@ export async function getMonitoringHistory(sessionId) {
             .from(live_monitoring_stats)
             .where(and(
                 eq(live_monitoring_stats.session_id, sessionId),
-                eq(live_monitoring_stats.user_id, LOGGED_IN_USER_ID)
+                eq(live_monitoring_stats.user_id, currentUserId)
             ))
             .orderBy(live_monitoring_stats.timestamp);
 

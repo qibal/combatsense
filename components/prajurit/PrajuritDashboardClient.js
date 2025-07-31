@@ -221,8 +221,8 @@ export default function PrajuritDashboardClient({
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {medicalHistory.length > 0 ? medicalHistory.map((record) => (
-                                        <Card key={record.id} className="border-l-4 border-l-red-500">
+                                    {medicalHistory.length > 0 ? medicalHistory.map((record, index) => (
+                                        <Card key={`medical-${record.id}-${index}`} className="border-l-4 border-l-red-500">
                                             <CardContent className="p-4">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div>
@@ -259,8 +259,8 @@ export default function PrajuritDashboardClient({
                             </CardHeader>
                             <CardContent>
                                 <div className="grid gap-4">
-                                    {availableSessions.length > 0 ? availableSessions.map((session) => (
-                                        <Card key={session.id} className="border-l-4 border-l-blue-500">
+                                    {availableSessions.length > 0 ? availableSessions.map((session, index) => (
+                                        <Card key={`session-${session.id}-${index}`} className="border-l-4 border-l-blue-500">
                                             <CardContent className="pt-4">
                                                 <div className="flex items-center justify-between mb-3">
                                                     <h4 className="font-semibold text-lg">{session.name || 'N/A'}</h4>
@@ -300,8 +300,8 @@ export default function PrajuritDashboardClient({
                             <CardContent>
                                 {trainingHistory.length > 0 ? (
                                     <div className="space-y-4">
-                                        {trainingHistory.map((session) => (
-                                            <Card key={session.id} className="border-l-4 border-l-green-500">
+                                        {trainingHistory.map((session, index) => (
+                                            <Card key={`history-${session.id}-${index}`} className="border-l-4 border-l-green-500">
                                                 <CardContent className="pt-4">
                                                     <div className="flex items-center justify-between mb-3">
                                                         <div>
@@ -322,12 +322,7 @@ export default function PrajuritDashboardClient({
                                             </Card>
                                         ))}
                                     </div>
-                                ) : (
-                                    <div className="text-center py-10">
-                                        <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" /><h3 className="text-lg font-medium text-gray-900 mb-2">Belum ada history</h3>
-                                        <p className="text-gray-500">Anda belum pernah mengikuti sesi latihan</p>
-                                    </div>
-                                )}
+                                ) : <p className="text-sm text-center text-gray-500 py-4">Belum ada riwayat sesi latihan.</p>}
                             </CardContent>
                         </Card>
                     </TabsContent>

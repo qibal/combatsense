@@ -158,6 +158,15 @@ export async function getAvailableUsersByRole(role, scheduledAt = null, excludeS
     else if (role === "medis") relasiTable = session_medics;
     else relasiTable = session_participants;
 
+    // Perbaikan: Jika scheduledAt tidak ada, jangan filter jadwal
+    if (!scheduledAt) {
+        // Ambil semua user dengan role tanpa filter jadwal
+        const result = await db.select()
+            .from(users)
+            .where(eq(users.role, role));
+        return result;
+    }
+
     let whereConditions = [
         eq(users.role, role),
         notExists(

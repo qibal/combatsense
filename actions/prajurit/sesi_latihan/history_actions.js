@@ -3,11 +3,30 @@
 import { db } from "@/lib/db";
 import { eq, and, sql } from "drizzle-orm";
 import { training_sessions, users, session_participants, live_monitoring_stats } from "@/lib/schema";
-
-const LOGGED_IN_USER_ID = 1; // Ubah ke number
+import { getCurrentUserId } from "@/lib/auth-utils";
 
 export async function getTrainingHistory() {
     try {
+        const currentUserId = await getCurrentUserId();
+        if (!currentUserId) {
+            return { success: false, message: "User tidak terautentikasi" };
+        }
+
+        // Debug: Cek apakah ada data di tabel training_sessions
+        const allSessions = await db.select().from(training_sessions);
+        console.log("DEBUG HISTORY: Total sessions in database:", allSessions.length);
+        console.log("DEBUG HISTORY: All sessions data:", allSessions);
+
+        // Debug: Cek apakah ada data di tabel session_participants
+        const allParticipants = await db.select().from(session_participants);
+        console.log("DEBUG HISTORY: Total participants in database:", allParticipants.length);
+        console.log("DEBUG HISTORY: All participants data:", allParticipants);
+
+        // Debug: Cek apakah ada data di tabel live_monitoring_stats
+        const allStats = await db.select().from(live_monitoring_stats);
+        console.log("DEBUG HISTORY: Total stats in database:", allStats.length);
+        console.log("DEBUG HISTORY: All stats data:", allStats);
+
         const history = await db.select({
             id: training_sessions.id,
             sessionName: training_sessions.name,
@@ -24,9 +43,11 @@ export async function getTrainingHistory() {
             .from(session_participants)
             .leftJoin(training_sessions, eq(session_participants.session_id, training_sessions.id))
             .where(and(
-                eq(session_participants.user_id, LOGGED_IN_USER_ID),
+                eq(session_participants.user_id, currentUserId),
                 eq(training_sessions.status, 'selesai')
             ));
+
+        console.log("DEBUG HISTORY: Raw history query result:", history);
 
         const processedHistory = history.map(item => {
             let duration = 'N/A';
@@ -100,6 +121,7 @@ export async function getTrainingHistory() {
         });
 
         console.log("getTrainingHistory processedHistory:", processedHistory); // Tambahkan log ini
+        console.log("DEBUG HISTORY: Processed history count:", processedHistory.length);
         return { success: true, data: processedHistory };
 
     } catch (error) {
@@ -119,6 +141,11 @@ export async function getHistoryDetail(sessionId) {
     }
 
     try {
+        const currentUserId = await getCurrentUserId();
+        if (!currentUserId) {
+            return { success: false, message: "User tidak terautentikasi" };
+        }
+
         const id = parseInt(sessionId, 10);
 
         // 1. Mengambil detail sesi latihan

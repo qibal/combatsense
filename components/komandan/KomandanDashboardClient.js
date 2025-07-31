@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/Shadcn/card';
 import { Button } from '@/components/Shadcn/button';
@@ -44,6 +44,7 @@ export default function KomandanDashboardClient() {
     const [unitOptions, setUnitOptions] = useState(["semua"]);
     const [rankOptions, setRankOptions] = useState(["semua"]);
     const [tabValue, setTabValue] = useState("sesi-aktif");
+    const intervalIdRef = useRef(null); // Tambahkan ref untuk interval
 
     const handleSetActiveSession = async (session) => {
         const res = await setSessionActive(session.id);
@@ -61,8 +62,15 @@ export default function KomandanDashboardClient() {
             toast.error("Sesi tidak valid. Tidak dapat menghentikan sesi.");
             return;
         }
-        const sessionId = sessionToStop.id;
+        // Hentikan interval simulasi sebelum update database
+        if (intervalIdRef.current) {
+            clearInterval(intervalIdRef.current);
+            intervalIdRef.current = null;
+        }
         setIsRecording(false);
+        setMonitoringStats({});
+        setLastPositions({});
+        const sessionId = sessionToStop.id;
         const allStats = JSON.parse(localStorage.getItem('sessionStats') || '[]');
         for (const stat of allStats) {
             await fetch('/api/komandan/statistik', {
@@ -76,20 +84,32 @@ export default function KomandanDashboardClient() {
             });
         }
         localStorage.removeItem('sessionStats');
-        await setSessionFinished(sessionId);
-        setAllSessions(await getAllSessions());
-        setTabValue("riwayat");
-        setActiveSessionId(null);
+        const res = await setSessionFinished(sessionId);
+        if (res.success) {
+            setAllSessions(await getAllSessions());
+            setTabValue("riwayat");
+            setActiveSessionId(null);
+            toast.success("Sesi latihan telah selesai dan diarsipkan.");
+        } else {
+            toast.error("Gagal menyelesaikan sesi: " + res.message);
+        }
     };
 
-    const handleStartRecording = () => {
+    const handleStartRecording = async () => {
         if (!activeSession) {
             toast.error("Tidak ada sesi aktif untuk memulai perekaman.");
             return;
         }
-        localStorage.setItem('sessionStats', JSON.stringify([]));
-        setIsRecording(true);
-        toast.success("Perekaman sesi dimulai.");
+        // Perbaikan: pastikan status sesi diubah ke "berlangsung" sebelum mulai merekam
+        const res = await setSessionActive(activeSession.id);
+        if (res.success) {
+            localStorage.setItem('sessionStats', JSON.stringify([]));
+            setIsRecording(true);
+            setAllSessions(await getAllSessions());
+            toast.success("Perekaman sesi dimulai.");
+        } else {
+            toast.error("Gagal memulai sesi: " + res.message);
+        }
     };
 
     const handleShowPrajuritDetail = async (p) => {
@@ -202,14 +222,26 @@ export default function KomandanDashboardClient() {
                     return updatedStats;
                 });
             }, 1000);
+
+            intervalIdRef.current = intervalId; // Simpan id interval ke ref
         } else {
             setMonitoringStats({});
             setLastPositions({});
+            // Pastikan interval dibersihkan jika tidak ada sesi aktif
+            if (intervalIdRef.current) {
+                clearInterval(intervalIdRef.current);
+                intervalIdRef.current = null;
+            }
         }
 
         return () => {
             if (intervalId) {
                 clearInterval(intervalId);
+            }
+            // Juga clear interval dari ref jika ada
+            if (intervalIdRef.current) {
+                clearInterval(intervalIdRef.current);
+                intervalIdRef.current = null;
             }
         };
     }, [activeSession]);
@@ -349,7 +381,7 @@ export default function KomandanDashboardClient() {
                                             {!isRecording && (
                                                 <Dialog>
                                                     <DialogTrigger asChild>
-                                                        <Button onClick={handleStartRecording} variant="success">
+                                                        <Button variant="success">
                                                             <Play className="mr-2 h-4 w-4" /> Mulai Sesi Latihan
                                                         </Button>
                                                     </DialogTrigger>
@@ -364,7 +396,10 @@ export default function KomandanDashboardClient() {
                                                             <DialogClose asChild>
                                                                 <Button variant="outline">Batal</Button>
                                                             </DialogClose>
-                                                            <Button onClick={() => handleSetActiveSession(activeSession)}>Ya, Mulai Sesi</Button>
+                                                            {/* Perbaikan: langsung jalankan handleStartRecording */}
+                                                            <DialogClose asChild>
+                                                                <Button onClick={handleStartRecording}>Ya, Mulai Sesi</Button>
+                                                            </DialogClose>
                                                         </DialogFooter>
                                                     </DialogContent>
                                                 </Dialog>
@@ -387,7 +422,10 @@ export default function KomandanDashboardClient() {
                                                             <DialogClose asChild>
                                                                 <Button variant="outline">Batal</Button>
                                                             </DialogClose>
-                                                            <Button variant="destructive" onClick={() => handleStopRecording(activeSession)}>Ya, Hentikan Sesi</Button>
+                                                            {/* Perbaikan: langsung jalankan handleStopRecording */}
+                                                            <DialogClose asChild>
+                                                                <Button variant="destructive" onClick={() => handleStopRecording(activeSession)}>Ya, Hentikan Sesi</Button>
+                                                            </DialogClose>
                                                         </DialogFooter>
                                                     </DialogContent>
                                                 </Dialog>
